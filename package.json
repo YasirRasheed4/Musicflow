@@ -1,0 +1,14 @@
+{
+  "name": "musicflow-starter",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm --prefix backend start\" \"npm --prefix frontend run dev\"",
+    "seed": "npm --prefix backend run seed",
+    "server": "npm --prefix backend start",
+    "client": "npm --prefix frontend run dev"
+  },
+  "dependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

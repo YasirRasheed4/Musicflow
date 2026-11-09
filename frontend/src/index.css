@@ -1,0 +1,186 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ======================================
+   THEME DEFINITIONS via CSS Variables
+   ====================================== */
+
+:root,
+.theme-obsidian {
+  --color-bg: #090D16;
+  --color-surface: #111827;
+  --color-surface2: #1F2937;
+  --color-line: #1f2937;
+  --color-accent: #10B981;
+  --color-accent2: #3B82F6;
+  --color-ink: #F9FAFB;
+  --color-muted: #9CA3AF;
+}
+
+.theme-oled {
+  --color-bg: #000000;
+  --color-surface: #0A0A0A;
+  --color-surface2: #141414;
+  --color-line: #1a1a1a;
+  --color-accent: #06B6D4;
+  --color-accent2: #A855F7;
+  --color-ink: #FFFFFF;
+  --color-muted: #A1A1AA;
+}
+
+.theme-cyberpunk {
+  --color-bg: #0D0B18;
+  --color-surface: #171226;
+  --color-surface2: #231B3A;
+  --color-line: #2d2050;
+  --color-accent: #F43F5E;
+  --color-accent2: #8B5CF6;
+  --color-ink: #FDF2F8;
+  --color-muted: #C084FC;
+}
+
+.theme-light {
+  --color-bg: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-surface2: #F1F5F9;
+  --color-line: #E2E8F0;
+  --color-accent: #6366F1;
+  --color-accent2: #0EA5E9;
+  --color-ink: #0F172A;
+  --color-muted: #64748B;
+}
+
+/* ======================================
+   BASE STYLES
+   ====================================== */
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+/* ======================================
+   SCROLLBARS
+   ====================================== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-surface2) transparent;
+}
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-thumb {
+  background: var(--color-surface2);
+  border-radius: 999px;
+}
+
+/* ======================================
+   WAVEFORM ANIMATION (playing indicator)
+   ====================================== */
+.waveform {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+.waveform span {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  animation: waveform-bounce 0.9s ease-in-out infinite;
+}
+.waveform span:nth-child(1) { animation-delay: -0.6s; }
+.waveform span:nth-child(2) { animation-delay: -0.3s; }
+.waveform span:nth-child(3) { animation-delay: -0.9s; }
+.waveform span:nth-child(4) { animation-delay: -0.15s; }
+
+@keyframes waveform-bounce {
+  0%, 100% { height: 3px; }
+  50% { height: 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waveform span { animation: none; height: 8px; }
+}
+
+/* ======================================
+   FOCUS & ACCESSIBILITY
+   ====================================== */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ======================================
+   RANGE INPUTS (seek bar, volume)
+   ====================================== */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-surface2);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  margin-top: -4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--color-accent);
+}
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-surface2);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-accent);
+}
+
+/* ======================================
+   UTILITY HELPERS
+   ====================================== */
+
+/* Glass card effect */
+.glass {
+  background: rgba(17, 24, 39, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.theme-light .glass {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* Nav active glow pill */
+.nav-active-glow {
+  position: relative;
+}
+.nav-active-glow::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  border-radius: 0 3px 3px 0;
+  background: var(--color-accent);
+}
