@@ -125,9 +125,13 @@ if (process.env.DB_CLIENT === "sqlite") {
   if (!connectionString) {
     throw new Error("Set DATABASE_URL to your PostgreSQL connection string");
   }
+  const databaseUrl = new URL(connectionString);
+  if (process.env.DATABASE_SSL_NO_VERIFY === "true" && databaseUrl.protocol.startsWith("postgres")) {
+    databaseUrl.searchParams.set("sslmode", "no-verify");
+  }
 
   const pool = new Pool({
-    connectionString,
+    connectionString: databaseUrl.toString(),
     max: Number(process.env.DB_POOL_MAX || 1),
     connectionTimeoutMillis: 10000,
   });

@@ -85,6 +85,11 @@ if the catalog is empty; no SQL import is required. Vercel service bindings
 are not needed: the browser calls the public `/api/*` route. Do not use the
 local SQLite database for production.
 
+If Supabase's URL causes a `self-signed certificate in certificate chain`
+error in Vercel, set `DATABASE_SSL_NO_VERIFY=true` on the backend service and
+redeploy. This retains encrypted TLS but disables certificate identity
+verification; only use it for the Supabase connection when required.
+
 ## What's implemented
 
 - Sign up / log in / session persistence (JWT)
