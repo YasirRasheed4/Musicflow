@@ -100,18 +100,16 @@ if (process.env.DB_CLIENT === "sqlite") {
   }
 
   module.exports = {
+    initialize: async () => {},
     prepare,
     exec(sql) {
       return connection.exec(sql);
     },
-    pragma(sql) {
-      return connection.exec(`PRAGMA ${sql}`);
-    },
     transaction(callback) {
-      return (...args) => {
+      return async (...args) => {
         connection.exec("BEGIN");
         try {
-          const result = callback(...args);
+          const result = await callback({ prepare }, ...args);
           connection.exec("COMMIT");
           return result;
         } catch (error) {
@@ -122,100 +120,173 @@ if (process.env.DB_CLIENT === "sqlite") {
     },
   };
 } else {
-  const SyncMySQL = require("sync-mysql");
-  function getMySQLConfig() {
-    if (process.env.DATABASE_URL) {
-      let databaseUrl;
-      try {
-        databaseUrl = new URL(process.env.DATABASE_URL);
-      } catch (error) {
-        throw new Error("DATABASE_URL must be a valid MySQL connection URL", { cause: error });
-      }
-
-      if (!["mysql:", "mysql2:"].includes(databaseUrl.protocol)) {
-        throw new Error("DATABASE_URL must use the mysql:// or mysql2:// protocol");
-      }
-
-      const database = decodeURIComponent(databaseUrl.pathname.replace(/^\/+/, ""));
-      const user = decodeURIComponent(databaseUrl.username);
-      const password = decodeURIComponent(databaseUrl.password);
-      if (!databaseUrl.hostname || !database || !user) {
-        throw new Error("DATABASE_URL must include a host, database name, and username");
-      }
-
-      const config = {
-        host: databaseUrl.hostname,
-        database,
-        user,
-        password,
-        port: Number(databaseUrl.port || 3306),
-        timeout: 10000,
-        multipleStatements: true,
-      };
-      const sslMode = databaseUrl.searchParams.get("ssl-mode")?.toUpperCase();
-      if (databaseUrl.searchParams.get("ssl") === "true" || (sslMode && sslMode !== "DISABLED")) {
-        config.ssl = {};
-      }
-      return config;
-    }
-
-    const required = ["DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD"];
-    const missing = required.filter((name) => !process.env[name]);
-    if (missing.length) {
-      throw new Error(
-        `Set DATABASE_URL or provide all MySQL environment variables: ${required.join(", ")}`
-      );
-    }
-
-    return {
-      host: process.env.DB_HOST,
-      database: process.env.DB_NAME,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      port: Number(process.env.DB_PORT || 3306),
-      timeout: 10000,
-      multipleStatements: true,
-    };
+  const { Pool } = require("pg");
+  const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+  if (!connectionString) {
+    throw new Error("Set DATABASE_URL to your PostgreSQL connection string");
   }
 
-  const connection = new SyncMySQL(getMySQLConfig());
+  const pool = new Pool({
+    connectionString,
+    max: Number(process.env.DB_POOL_MAX || 1),
+    connectionTimeoutMillis: 10000,
+  });
+  let initialization;
+
+  function toPostgres(sql) {
+    let index = 0;
+    return sql.replace(/\?/g, () => `$${++index}`).replace(/\bINSERT\s+IGNORE\s+INTO\b/gi, "INSERT INTO");
+  }
+
+  function isGeneratedIdInsert(sql) {
+    return /^\s*INSERT\s+INTO\s+(users|artists|albums|tracks|playlists|playback_history)\b/i.test(sql);
+  }
+
+  async function initialize() {
+    if (!initialization) {
+      initialization = pool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL,
+          email TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'listener',
+          subscription_status TEXT NOT NULL DEFAULT 'free',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS artists (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL,
+          bio TEXT,
+          genre_tags TEXT,
+          cover_url TEXT
+        );
+        CREATE TABLE IF NOT EXISTS albums (
+          id SERIAL PRIMARY KEY,
+          title TEXT NOT NULL,
+          artist_id INTEGER NOT NULL REFERENCES artists(id),
+          release_date DATE,
+          cover_url TEXT,
+          label TEXT
+        );
+        CREATE TABLE IF NOT EXISTS tracks (
+          id SERIAL PRIMARY KEY,
+          title TEXT NOT NULL,
+          artist_id INTEGER NOT NULL REFERENCES artists(id),
+          album_id INTEGER REFERENCES albums(id),
+          duration INTEGER NOT NULL DEFAULT 0,
+          audio_url TEXT,
+          cover_url TEXT,
+          genre_tags TEXT,
+          mood_tags TEXT,
+          is_downloadable INTEGER NOT NULL DEFAULT 0,
+          is_explicit INTEGER NOT NULL DEFAULT 0,
+          release_date DATE
+        );
+        CREATE TABLE IF NOT EXISTS playlists (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id),
+          name TEXT NOT NULL,
+          description TEXT,
+          is_public INTEGER NOT NULL DEFAULT 0,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS playlist_tracks (
+          playlist_id INTEGER NOT NULL REFERENCES playlists(id),
+          track_id INTEGER NOT NULL REFERENCES tracks(id),
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (playlist_id, track_id)
+        );
+        CREATE TABLE IF NOT EXISTS favorites (
+          user_id INTEGER NOT NULL REFERENCES users(id),
+          track_id INTEGER NOT NULL REFERENCES tracks(id),
+          created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (user_id, track_id)
+        );
+        CREATE TABLE IF NOT EXISTS playback_history (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id),
+          track_id INTEGER NOT NULL REFERENCES tracks(id),
+          played_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          duration_listened INTEGER NOT NULL DEFAULT 0
+        );
+      `);
+      initialization = initialization.catch((error) => {
+        initialization = undefined;
+        throw error;
+      });
+    }
+    await initialization;
+  }
 
   function prepare(sql) {
     return {
-      all(...params) {
-        return connection.query(sql, params);
+      async all(...params) {
+        return (await pool.query(toPostgres(sql), params)).rows;
       },
-      get(...params) {
-        return connection.query(sql, params)[0] || undefined;
+      async get(...params) {
+        return (await pool.query(toPostgres(sql), params)).rows[0];
       },
-      run(...params) {
-        const result = connection.query(sql, params);
+      async run(...params) {
+        let query = toPostgres(sql).trim().replace(/;$/, "");
+        const ignoresConflict = /\bINSERT\s+IGNORE\s+INTO\b/i.test(sql);
+        if (ignoresConflict) query += " ON CONFLICT DO NOTHING";
+        const returningId = isGeneratedIdInsert(query);
+        if (returningId) query += " RETURNING id";
+        const result = await pool.query(query, params);
         return {
-          changes: result.affectedRows || 0,
-          lastInsertRowid: result.insertId,
+          changes: result.rowCount,
+          lastInsertRowid: result.rows[0] && result.rows[0].id,
         };
       },
     };
   }
 
+  async function transaction(callback) {
+    const client = await pool.connect();
+    const tx = {
+      async lockSeed() {
+        await client.query("SELECT pg_advisory_xact_lock(246813579)");
+      },
+      prepare(sql) {
+        return {
+          async all(...params) {
+            return (await client.query(toPostgres(sql), params)).rows;
+          },
+          async get(...params) {
+            return (await client.query(toPostgres(sql), params)).rows[0];
+          },
+          async run(...params) {
+            let query = toPostgres(sql).trim().replace(/;$/, "");
+            const ignoresConflict = /\bINSERT\s+IGNORE\s+INTO\b/i.test(sql);
+            if (ignoresConflict) query += " ON CONFLICT DO NOTHING";
+            if (isGeneratedIdInsert(query)) query += " RETURNING id";
+            const result = await client.query(query, params);
+            return {
+              changes: result.rowCount,
+              lastInsertRowid: result.rows[0] && result.rows[0].id,
+            };
+          },
+        };
+      },
+    };
+    try {
+      await client.query("BEGIN");
+      const result = await callback(tx);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   module.exports = {
+    initialize,
     prepare,
-    exec(sql) {
-      return connection.query(sql);
-    },
-    pragma() {},
-    transaction(callback) {
-      return (...args) => {
-        connection.query("START TRANSACTION");
-        try {
-          const result = callback(...args);
-          connection.query("COMMIT");
-          return result;
-        } catch (error) {
-          connection.query("ROLLBACK");
-          throw error;
-        }
-      };
-    },
+    transaction,
+    close: () => pool.end(),
   };
 }

@@ -3,6 +3,9 @@ require("dotenv").config();
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
+const db = require("./db");
+const seedData = require("./seed");
+const asyncHandler = require("./middleware/asyncHandler");
 
 const authRoutes = require("./routes/auth");
 const trackRoutes = require("./routes/tracks");
@@ -19,6 +22,11 @@ const allowedOrigin = process.env.FRONTEND_URL;
 
 app.use(cors(allowedOrigin ? { origin: allowedOrigin } : undefined));
 app.use(express.json({ limit: "50mb" }));
+app.use(asyncHandler(async (_req, _res, next) => {
+  await db.initialize();
+  await seedData();
+  next();
+}));
 
 // Placeholder audio + cover art generated for this starter (see generate_assets.py).
 // Swap for signed URLs to real licensed audio/S3 storage per the PRD when available.
@@ -36,6 +44,11 @@ app.use("/api", albumRoutes);
 app.use("/api", artistRoutes);
 
 app.use((req, res) => res.status(404).json({ error: "Not found" }));
+app.use((error, _req, res, next) => {
+  console.error("API request failed:", error);
+  if (res.headersSent) return next(error);
+  res.status(500).json({ error: "Internal server error" });
+});
 
 app.listen(PORT, () => {
   console.log(`MusicFlow API listening on http://localhost:${PORT}`);

@@ -2,6 +2,7 @@ const { Router } = require("express");
 const db = require("../db");
 const serialize = require("../serialize");
 const { requireAuth } = require("../middleware/auth");
+const asyncHandler = require("../middleware/asyncHandler");
 
 const router = Router();
 router.use(requireAuth);
@@ -13,8 +14,8 @@ const TRACK_SELECT = `
   LEFT JOIN albums ON albums.id = tracks.album_id
 `;
 
-router.get("/", (req, res) => {
-  const rows = db
+router.get("/", asyncHandler(async (req, res) => {
+  const rows = await db
     .prepare(
       `${TRACK_SELECT}
        JOIN favorites ON favorites.track_id = tracks.id
@@ -23,24 +24,24 @@ router.get("/", (req, res) => {
     )
     .all(req.user.id);
   res.json({ tracks: rows.map(serialize.track) });
-});
+}));
 
-router.post("/:trackId", (req, res) => {
-  const track = db.prepare("SELECT id FROM tracks WHERE id = ?").get(req.params.trackId);
+router.post("/:trackId", asyncHandler(async (req, res) => {
+  const track = await db.prepare("SELECT id FROM tracks WHERE id = ?").get(req.params.trackId);
   if (!track) return res.status(404).json({ error: "Track not found" });
-  db.prepare("INSERT IGNORE INTO favorites (user_id, track_id) VALUES (?, ?)").run(
+  await db.prepare("INSERT IGNORE INTO favorites (user_id, track_id) VALUES (?, ?)").run(
     req.user.id,
     req.params.trackId
   );
   res.status(201).json({ ok: true });
-});
+}));
 
-router.delete("/:trackId", (req, res) => {
-  db.prepare("DELETE FROM favorites WHERE user_id = ? AND track_id = ?").run(
+router.delete("/:trackId", asyncHandler(async (req, res) => {
+  await db.prepare("DELETE FROM favorites WHERE user_id = ? AND track_id = ?").run(
     req.user.id,
     req.params.trackId
   );
   res.json({ ok: true });
-});
+}));
 
 module.exports = router;

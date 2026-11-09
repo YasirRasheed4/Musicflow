@@ -57,7 +57,7 @@ function playlist(row) {
     name: row.name,
     description: row.description,
     coverUrl: row.cover_url || null,
-    trackCount: row.track_count !== undefined ? row.track_count : undefined,
+    trackCount: row.track_count !== undefined ? Number(row.track_count) : undefined,
     isPublic: !!row.is_public,
     createdAt: row.created_at,
   };

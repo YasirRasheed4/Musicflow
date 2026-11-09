@@ -21,13 +21,13 @@ full PRD" below) — the schema and API already support it.
 |-----------|--------------------------------|---------------------------------|
 | Frontend  | React + Vite + Tailwind        | React or Next.js                |
 | Backend   | Node.js + Express              | Node.js + Express or NestJS     |
-| Database  | MySQL                          | PostgreSQL                      |
+| Database  | PostgreSQL in production; SQLite locally | PostgreSQL             |
 | Search    | SQL `LIKE` queries              | Meilisearch / Elasticsearch     |
 | Storage   | Local static files              | S3-compatible + signed URLs     |
 | Auth      | JWT + bcrypt                    | JWT + bcrypt ✓ (same)           |
 
-The backend connects to MySQL using environment variables by default. Local
-development can use a SQLite database instead, without a MySQL server.
+The backend uses PostgreSQL in production and can use SQLite locally, without
+requiring a hosted database during development.
 
 ## Regenerating the placeholder catalog
 
@@ -40,7 +40,7 @@ distros, so cover text rendering may need a different font path on macOS/Windows
 
 ## Setup
 
-Requires Node 18+ for MySQL. SQLite local development requires Node 22+.
+Requires Node 22+.
 
 ```bash
 # 1. Backend
@@ -48,7 +48,7 @@ cd backend
 npm install
 # In PowerShell, select local SQLite before starting or seeding:
 $env:DB_CLIENT = "sqlite"
-npm run seed      # resets and populates the local SQLite database
+npm run seed      # adds demo data only when the catalog is empty
 npm start          # http://localhost:4000
 
 # 2. Frontend (separate terminal)
@@ -64,7 +64,8 @@ Open http://localhost:5173. Log in with the seeded demo account:
 
 Or create your own account from the Sign up page.
 
-Re-run `npm run seed` any time to reset the catalog back to its original state.
+The demo data is inserted only when the database has no artists. `npm run seed`
+does not delete or reset existing data.
 
 ## Deploying the full app to Vercel
 
@@ -75,29 +76,14 @@ Requests to `/api/*` go to the backend; all other paths, including `/audio/*`
 and `/covers/*`, go to the frontend. The frontend calls the API through the
 same-origin `/api` path, so leave `VITE_API_URL` unset for this deployment.
 
-Add a MySQL integration from the Vercel Marketplace and expose its connection
-URL to the backend as `DATABASE_URL` (or map its individual values to the
-`DB_*` variables in `backend/.env.example`). Also set `NODE_ENV=production`
-and a private `JWT_SECRET` on the backend service. Initialize the database
-once with `database/musicflow-mysql.sql` using the provider's SQL console or
-client. Vercel service bindings are not needed: the browser calls the public
-`/api/*` route, and MySQL is an external managed database. Do not use the local
-SQLite database for a serverless production deployment.
-
-## Setting up MySQL
-
-MySQL remains the default database and is used whenever `DB_CLIENT` is not
-set to `sqlite`.
-
-Create a MySQL database and set the variables in `backend/.env` using
-`backend/.env.example`. Import `database/musicflow-mysql.sql` with:
-
-```bash
-mysql -u YOUR_USER -p YOUR_DATABASE < database/musicflow-mysql.sql
-```
-
-The SQL file contains all eight tables and the starter data. Do not upload it
-to the website's `htdocs` folder.
+Install a PostgreSQL database integration such as Neon from Vercel's
+Marketplace, connect it to this Vercel project, and make its PostgreSQL
+connection URL available to the backend as `DATABASE_URL` or `POSTGRES_URL`.
+Set `NODE_ENV=production` and a private `JWT_SECRET` for the backend. On the
+first API request, the backend creates its tables and inserts the demo catalog
+if the catalog is empty; no SQL import is required. Vercel service bindings
+are not needed: the browser calls the public `/api/*` route. Do not use the
+local SQLite database for production.
 
 ## What's implemented
 
@@ -121,7 +107,7 @@ to the website's `htdocs` folder.
 
 ```
 backend/
-   db.js              MySQL connection adapter
+  db.js               PostgreSQL/SQLite database adapter
   seed.js            Populates the mock catalog + demo account
   server.js           Express app entry point
   middleware/auth.js  JWT sign/verify
@@ -132,20 +118,18 @@ frontend/
   src/components/       Sidebar, TopBar, MobileNav, PlayerBar, TrackRow, Card, ...
   src/pages/            Home, Search, Library, Login, Signup, AlbumDetail, PlaylistDetail
 database/
-   musicflow-mysql.sql MySQL schema and starter data
+  musicflow-mysql.sql  Legacy MySQL schema export (not used by Vercel)
 ```
 
 ## Moving toward the full PRD
 
 Roughly in order of what unlocks the most:
 
-1. **Postgres**: swap `db.js` for a `pg` connection; the `CREATE TABLE`
-   statements translate almost directly (mainly `AUTOINCREMENT` → `SERIAL`).
-2. **Real storage**: put audio/cover files in S3 (or similar), generate
+1. **Real storage**: put uploaded audio/cover files in S3 (or similar), generate
    signed URLs in the track/album serializers instead of static `/audio/...` paths.
-3. **Search**: stand up Meilisearch, index tracks/albums/artists on write,
+2. **Search**: stand up Meilisearch, index tracks/albums/artists on write,
    swap the `/api/search` handler to query it instead of `LIKE`.
-4. **Admin panel**: a protected `/admin` area (check `role === 'admin'` in
+3. **Admin panel**: a protected `/admin` area (check `role === 'admin'` in
    `requireAuth`) for CRUD on artists/albums/tracks.
-5. **Downloads**: add a `downloads` table, an entitlement check endpoint, and
+4. **Downloads**: add a `downloads` table, an entitlement check endpoint, and
    move past direct static-file links.
