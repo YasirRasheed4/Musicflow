@@ -123,22 +123,62 @@ if (process.env.DB_CLIENT === "sqlite") {
   };
 } else {
   const SyncMySQL = require("sync-mysql");
-  const required = ["DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD"];
-  const missing = required.filter((name) => !process.env[name]);
+  function getMySQLConfig() {
+    if (process.env.DATABASE_URL) {
+      let databaseUrl;
+      try {
+        databaseUrl = new URL(process.env.DATABASE_URL);
+      } catch (error) {
+        throw new Error("DATABASE_URL must be a valid MySQL connection URL", { cause: error });
+      }
 
-  if (missing.length) {
-    throw new Error(`Missing database environment variables: ${missing.join(", ")}`);
+      if (!["mysql:", "mysql2:"].includes(databaseUrl.protocol)) {
+        throw new Error("DATABASE_URL must use the mysql:// or mysql2:// protocol");
+      }
+
+      const database = decodeURIComponent(databaseUrl.pathname.replace(/^\/+/, ""));
+      const user = decodeURIComponent(databaseUrl.username);
+      const password = decodeURIComponent(databaseUrl.password);
+      if (!databaseUrl.hostname || !database || !user) {
+        throw new Error("DATABASE_URL must include a host, database name, and username");
+      }
+
+      const config = {
+        host: databaseUrl.hostname,
+        database,
+        user,
+        password,
+        port: Number(databaseUrl.port || 3306),
+        timeout: 10000,
+        multipleStatements: true,
+      };
+      const sslMode = databaseUrl.searchParams.get("ssl-mode")?.toUpperCase();
+      if (databaseUrl.searchParams.get("ssl") === "true" || (sslMode && sslMode !== "DISABLED")) {
+        config.ssl = {};
+      }
+      return config;
+    }
+
+    const required = ["DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD"];
+    const missing = required.filter((name) => !process.env[name]);
+    if (missing.length) {
+      throw new Error(
+        `Set DATABASE_URL or provide all MySQL environment variables: ${required.join(", ")}`
+      );
+    }
+
+    return {
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      port: Number(process.env.DB_PORT || 3306),
+      timeout: 10000,
+      multipleStatements: true,
+    };
   }
 
-  const connection = new SyncMySQL({
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    port: Number(process.env.DB_PORT || 3306),
-    timeout: 10000,
-    multipleStatements: true,
-  });
+  const connection = new SyncMySQL(getMySQLConfig());
 
   function prepare(sql) {
     return {

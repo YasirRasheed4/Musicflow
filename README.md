@@ -31,12 +31,12 @@ development can use a SQLite database instead, without a MySQL server.
 
 ## Regenerating the placeholder catalog
 
-`generate_assets.py` (repo root) wrote everything in `backend/audio/` and
-`backend/covers/`. Re-run it any time you tweak the track list or want a
-different color palette for the covers — it needs Python 3 with `numpy` and
-`Pillow` (`pip install numpy pillow`), and was built against the DejaVu
-fonts that ship on most Linux distros, so cover text rendering may need a
-different font path on macOS/Windows.
+`generate_assets.py` (repo root) writes placeholder media into `backend/audio/`,
+`backend/covers/`, and the frontend's `public/audio/` and `public/covers/`.
+Re-run it any time you tweak the track list or want a different color palette
+for the covers — it needs Python 3 with `numpy` and `Pillow` (`pip install
+numpy pillow`), and was built against the DejaVu fonts that ship on most Linux
+distros, so cover text rendering may need a different font path on macOS/Windows.
 
 ## Setup
 
@@ -65,6 +65,24 @@ Open http://localhost:5173. Log in with the seeded demo account:
 Or create your own account from the Sign up page.
 
 Re-run `npm run seed` any time to reset the catalog back to its original state.
+
+## Deploying the full app to Vercel
+
+The root `vercel.json` configures the `backend` Express service and `frontend`
+Vite service under one Vercel project and domain. Set the Vercel project's
+Root Directory to the repository root (`.`), not `frontend` or `backend`.
+Requests to `/api/*` go to the backend; all other paths, including `/audio/*`
+and `/covers/*`, go to the frontend. The frontend calls the API through the
+same-origin `/api` path, so leave `VITE_API_URL` unset for this deployment.
+
+Add a MySQL integration from the Vercel Marketplace and expose its connection
+URL to the backend as `DATABASE_URL` (or map its individual values to the
+`DB_*` variables in `backend/.env.example`). Also set `NODE_ENV=production`
+and a private `JWT_SECRET` on the backend service. Initialize the database
+once with `database/musicflow-mysql.sql` using the provider's SQL console or
+client. Vercel service bindings are not needed: the browser calls the public
+`/api/*` route, and MySQL is an external managed database. Do not use the local
+SQLite database for a serverless production deployment.
 
 ## Setting up MySQL
 

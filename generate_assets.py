@@ -6,10 +6,11 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend")
-AUDIO_DIR = os.path.join(BASE, "audio")
-COVER_DIR = os.path.join(BASE, "covers")
-os.makedirs(AUDIO_DIR, exist_ok=True)
-os.makedirs(COVER_DIR, exist_ok=True)
+ROOT = os.path.dirname(BASE)
+AUDIO_DIRS = [os.path.join(BASE, "audio"), os.path.join(ROOT, "frontend", "public", "audio")]
+COVER_DIRS = [os.path.join(BASE, "covers"), os.path.join(ROOT, "frontend", "public", "covers")]
+for directory in AUDIO_DIRS + COVER_DIRS:
+    os.makedirs(directory, exist_ok=True)
 
 SR = 22050
 
@@ -123,7 +124,8 @@ for fname, album_key, genre, root, dur, seed in TRACKS:
         sig = add_bass(sig, root, g["tempo"])
     if g["noise"]:
         sig = add_noise(sig)
-    write_wav(os.path.join(AUDIO_DIR, fname), sig)
+    for audio_dir in AUDIO_DIRS:
+        write_wav(os.path.join(audio_dir, fname), sig)
     print("audio:", fname)
 
 # ---------- cover art ----------
@@ -180,7 +182,8 @@ ALBUM_COVERS = [
 ]
 
 for fname, title, artist, c1, c2, grain in ALBUM_COVERS:
-    make_cover(os.path.join(COVER_DIR, fname), title, artist, c1, c2, grain)
+    for cover_dir in COVER_DIRS:
+        make_cover(os.path.join(cover_dir, fname), title, artist, c1, c2, grain)
     print("cover:", fname)
 
 print("done")
