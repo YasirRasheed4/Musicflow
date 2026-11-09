@@ -126,15 +126,25 @@ if (process.env.DB_CLIENT === "sqlite") {
     throw new Error("Set DATABASE_URL to your PostgreSQL connection string");
   }
   const databaseUrl = new URL(connectionString);
-  if (process.env.DATABASE_SSL_NO_VERIFY === "true" && databaseUrl.protocol.startsWith("postgres")) {
-    databaseUrl.searchParams.set("sslmode", "no-verify");
+  const allowUnverifiedDatabaseCertificate =
+    process.env.DATABASE_SSL_NO_VERIFY === "true" &&
+    ["postgres:", "postgresql:"].includes(databaseUrl.protocol);
+  if (allowUnverifiedDatabaseCertificate) {
+    for (const parameter of ["sslmode", "ssl", "sslcert", "sslkey", "sslrootcert", "sslpassword", "uselibpqcompat"]) {
+      databaseUrl.searchParams.delete(parameter);
+    }
   }
 
-  const pool = new Pool({
+  const poolConfig = {
     connectionString: databaseUrl.toString(),
     max: Number(process.env.DB_POOL_MAX || 1),
     connectionTimeoutMillis: 10000,
-  });
+  };
+  if (allowUnverifiedDatabaseCertificate) {
+    poolConfig.ssl = { rejectUnauthorized: false };
+    console.warn("PostgreSQL TLS certificate verification is disabled by DATABASE_SSL_NO_VERIFY");
+  }
+  const pool = new Pool(poolConfig);
   let initialization;
 
   function toPostgres(sql) {
