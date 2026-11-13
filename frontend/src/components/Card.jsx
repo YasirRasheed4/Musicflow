@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom";
-import { Pencil, Play, Trash2 } from "lucide-react";
+import { Pencil, Play, Trash2, X } from "lucide-react";
 import MusicFlowIcon from "./MusicFlowIcon";
 
-export default function Card({ to, image, title, subtitle, onPlay, onDelete, onRename }) {
+export default function Card({ to, image, title, subtitle, onPlay, onDelete, onRename, onRemove }) {
   return (
     <Link to={to} className="group relative w-40 shrink-0">
       <div className="relative aspect-square overflow-hidden rounded-xl bg-surface2 shadow-lg shadow-black/30">
@@ -52,6 +52,20 @@ export default function Card({ to, image, title, subtitle, onPlay, onDelete, onR
             aria-label={`Delete ${title}`}
           >
             <Trash2 size={14} />
+          </button>
+        )}
+        {onRemove && (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onRemove();
+            }}
+            className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-muted opacity-100 backdrop-blur-sm transition duration-200 hover:bg-rose-500 hover:text-white sm:-translate-y-1 sm:opacity-0 sm:group-hover:translate-y-0 sm:group-hover:opacity-100"
+            title={`Remove ${title} from Tonight's Rotation`}
+            aria-label={`Remove ${title} from Tonight's Rotation`}
+          >
+            <X size={14} />
           </button>
         )}
       </div>

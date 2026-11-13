@@ -57,6 +57,10 @@ if (process.env.DB_CLIENT === "sqlite") {
       is_public INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS rotation_albums (
+      album_id INTEGER PRIMARY KEY REFERENCES albums(id),
+      sort_order INTEGER NOT NULL DEFAULT 0
+    );
     CREATE TABLE IF NOT EXISTS playlist_tracks (
       playlist_id INTEGER NOT NULL REFERENCES playlists(id),
       track_id INTEGER NOT NULL REFERENCES tracks(id),
@@ -202,6 +206,10 @@ if (process.env.DB_CLIENT === "sqlite") {
           description TEXT,
           is_public INTEGER NOT NULL DEFAULT 0,
           created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS rotation_albums (
+          album_id INTEGER PRIMARY KEY REFERENCES albums(id),
+          sort_order INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS playlist_tracks (
           playlist_id INTEGER NOT NULL REFERENCES playlists(id),

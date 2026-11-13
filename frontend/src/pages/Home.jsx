@@ -10,18 +10,21 @@ import { usePlaylists } from "../context/PlaylistsContext";
 export default function Home() {
   const [playlists, setPlaylists] = useState([]);
   const [albums, setAlbums] = useState([]);
+  const [rotationAlbums, setRotationAlbums] = useState([]);
+  const [rotationAlbumId, setRotationAlbumId] = useState("");
   const [tracks, setTracks] = useState([]);
   const [addTrack, setAddTrack] = useState(null);
   const [error, setError] = useState("");
   const { playTrack } = usePlayer();
   const { user } = useAuth();
-  const { renamePlaylist } = usePlaylists();
+  const { renamePlaylist, deletePlaylist } = usePlaylists();
 
   useEffect(() => {
     api.get("/playlists/public").then(async (res) => {
       const detailed = await Promise.all(res.playlists.map((p) => api.get(`/playlists/${p.id}`)));
       setPlaylists(detailed.map((d) => ({ ...d.playlist, tracks: d.tracks })));
     });
+    api.get("/rotation/albums").then((res) => setRotationAlbums(res.albums));
     api.get("/albums").then((res) => setAlbums(res.albums));
     api.get("/tracks?limit=8").then((res) => setTracks(res.tracks));
   }, []);
@@ -39,6 +42,7 @@ export default function Home() {
     try {
       await api.delete(`/albums/${album.id}`);
       setAlbums((previous) => previous.filter((item) => item.id !== album.id));
+      setRotationAlbums((previous) => previous.filter((item) => item.id !== album.id));
       setTracks((previous) => previous.filter((track) => track.albumId !== album.id));
     } catch (err) {
       setError(err.message || "Failed to delete album");
@@ -58,12 +62,45 @@ export default function Home() {
     }
   };
 
+  const handleDeletePlaylist = async (playlist) => {
+    if (!window.confirm(`Delete the playlist "${playlist.name}"?`)) return;
+    try {
+      await deletePlaylist(playlist.id);
+      setPlaylists((previous) => previous.filter((item) => item.id !== playlist.id));
+    } catch (err) {
+      setError(err.message || "Failed to delete playlist");
+    }
+  };
+
+  const handleAddAlbumToRotation = async () => {
+    if (!rotationAlbumId) return;
+    try {
+      const { album } = await api.post("/rotation/albums", { albumId: Number(rotationAlbumId) });
+      setRotationAlbums((previous) =>
+        previous.some((item) => item.id === album.id) ? previous : [...previous, album]
+      );
+      setRotationAlbumId("");
+    } catch (err) {
+      setError(err.message || "Failed to add album to Tonight's Rotation");
+    }
+  };
+
+  const handleRemoveAlbumFromRotation = async (album) => {
+    try {
+      await api.delete(`/rotation/albums/${album.id}`);
+      setRotationAlbums((previous) => previous.filter((item) => item.id !== album.id));
+    } catch (err) {
+      setError(err.message || "Failed to remove album from Tonight's Rotation");
+    }
+  };
+
   const handleRenameAlbum = async (album) => {
     const title = window.prompt("Enter a new album name", album.title);
     if (title === null || !title.trim()) return;
     try {
       const { album: updatedAlbum } = await api.patch(`/albums/${album.id}`, { title });
       setAlbums((previous) => previous.map((item) => item.id === album.id ? updatedAlbum : item));
+      setRotationAlbums((previous) => previous.map((item) => item.id === album.id ? updatedAlbum : item));
       setTracks((previous) => previous.map((track) =>
         track.albumId === album.id ? { ...track, albumTitle: updatedAlbum.title } : track
       ));
@@ -82,6 +119,10 @@ export default function Home() {
     }
   };
 
+  const availableRotationAlbums = albums.filter(
+    (album) => !rotationAlbums.some((item) => item.id === album.id)
+  );
+
   return (
     <div className="flex flex-col gap-10 pb-10">
       {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
@@ -90,9 +131,33 @@ export default function Home() {
         <p className="text-muted">Editorial picks and new arrivals, for tonight.</p>
       </div>
 
-      {playlists.length > 0 && (
+      {(playlists.length > 0 || rotationAlbums.length > 0 || (user && availableRotationAlbums.length > 0)) && (
         <section>
           <h2 className="mb-3 font-display text-xl">Tonight's Rotation</h2>
+          {user && availableRotationAlbums.length > 0 && (
+            <div className="mb-3 flex max-w-lg gap-2">
+              <select
+                value={rotationAlbumId}
+                onChange={(event) => setRotationAlbumId(event.target.value)}
+                className="min-w-0 flex-1 rounded-lg bg-surface2 px-3 py-2 text-sm text-ink"
+                aria-label="Choose an album to add to Tonight's Rotation"
+              >
+                <option value="">Add an album...</option>
+                {availableRotationAlbums.map((album) => (
+                  <option key={album.id} value={album.id}>
+                    {album.title} — {album.artistName}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleAddAlbumToRotation}
+                disabled={!rotationAlbumId}
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-bg disabled:opacity-50"
+              >
+                Add Album
+              </button>
+            </div>
+          )}
           <div className="flex gap-4 overflow-x-auto pb-2">
             {playlists.map((p) => (
               <Card
@@ -103,6 +168,22 @@ export default function Home() {
                 subtitle={p.description}
                 onPlay={() => p.tracks.length && playTrack(p.tracks[0], p.tracks)}
                 onRename={user && user.id === p.userId ? () => handleRenamePlaylist(p) : undefined}
+                onDelete={user && user.id === p.userId ? () => handleDeletePlaylist(p) : undefined}
+              />
+            ))}
+            {rotationAlbums.map((album) => (
+              <Card
+                key={`rotation-album-${album.id}`}
+                to={`/albums/${album.id}`}
+                image={album.coverUrl}
+                title={album.title}
+                subtitle={album.artistName}
+                onPlay={async () => {
+                  const res = await api.get(`/albums/${album.id}`);
+                  if (res.tracks.length) playTrack(res.tracks[0], res.tracks);
+                }}
+                onRename={user ? () => handleRenameAlbum(album) : undefined}
+                onRemove={user ? () => handleRemoveAlbumFromRotation(album) : undefined}
               />
             ))}
           </div>
