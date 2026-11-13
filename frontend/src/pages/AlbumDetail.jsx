@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Play, Trash2 } from "lucide-react";
+import { Pencil, Play, Trash2 } from "lucide-react";
 import TrackRow from "../components/TrackRow";
 import AddToPlaylistModal from "../components/AddToPlaylistModal";
 import { api } from "../api";
@@ -35,6 +35,18 @@ export default function AlbumDetail() {
     }
   };
 
+  const handleRenameAlbum = async () => {
+    const title = window.prompt("Enter a new album name", album.title);
+    if (title === null || !title.trim()) return;
+    try {
+      const { album: updatedAlbum } = await api.patch(`/albums/${album.id}`, { title });
+      setAlbum(updatedAlbum);
+      setTracks((previous) => previous.map((track) => ({ ...track, albumTitle: updatedAlbum.title })));
+    } catch (err) {
+      setError(err.message || "Failed to rename album");
+    }
+  };
+
   const handleDeleteTrack = async (track) => {
     if (!window.confirm(`Delete "${track.title}"? This removes it from all playlists and favorites.`)) return;
     try {
@@ -65,12 +77,20 @@ export default function AlbumDetail() {
             <Play size={16} fill="currentColor" /> Play
           </button>
           {user && (
-            <button
-              onClick={handleDeleteAlbum}
-              className="mt-3 flex items-center gap-2 rounded-full bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-400 hover:bg-rose-500/20"
-            >
-              <Trash2 size={16} /> Delete album
-            </button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={handleRenameAlbum}
+                className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink hover:bg-line"
+              >
+                <Pencil size={16} /> Rename album
+              </button>
+              <button
+                onClick={handleDeleteAlbum}
+                className="flex items-center gap-2 rounded-full bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-400 hover:bg-rose-500/20"
+              >
+                <Trash2 size={16} /> Delete album
+              </button>
+            </div>
           )}
         </div>
       </div>

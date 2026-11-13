@@ -34,6 +34,17 @@ router.get("/albums/:id", asyncHandler(async (req, res) => {
   res.json({ album: serialize.album(row), tracks });
 }));
 
+router.patch("/albums/:id", requireAuth, asyncHandler(async (req, res) => {
+  const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+  if (!title) return res.status(400).json({ error: "Album name is required" });
+
+  const result = await db.prepare("UPDATE albums SET title = ? WHERE id = ?").run(title, req.params.id);
+  if (!result.changes) return res.status(404).json({ error: "Album not found" });
+
+  const row = await db.prepare(`${ALBUM_SELECT} WHERE albums.id = ?`).get(req.params.id);
+  res.json({ album: serialize.album(row) });
+}));
+
 router.delete("/albums/:id", requireAuth, asyncHandler(async (req, res) => {
   const album = await db.prepare("SELECT * FROM albums WHERE id = ?").get(req.params.id);
   if (!album) return res.status(404).json({ error: "Album not found" });

@@ -43,6 +43,20 @@ export default function Home() {
     }
   };
 
+  const handleRenameAlbum = async (album) => {
+    const title = window.prompt("Enter a new album name", album.title);
+    if (title === null || !title.trim()) return;
+    try {
+      const { album: updatedAlbum } = await api.patch(`/albums/${album.id}`, { title });
+      setAlbums((previous) => previous.map((item) => item.id === album.id ? updatedAlbum : item));
+      setTracks((previous) => previous.map((track) =>
+        track.albumId === album.id ? { ...track, albumTitle: updatedAlbum.title } : track
+      ));
+    } catch (err) {
+      setError(err.message || "Failed to rename album");
+    }
+  };
+
   const handleDeleteTrack = async (track) => {
     if (!window.confirm(`Delete "${track.title}"? This removes it from all playlists and favorites.`)) return;
     try {
@@ -92,6 +106,7 @@ export default function Home() {
                 subtitle={a.artistName}
                 onPlay={() => playAlbum(a.id)}
                 onDelete={user ? () => handleDeleteAlbum(a) : undefined}
+                onRename={user ? () => handleRenameAlbum(a) : undefined}
               />
             ))}
           </div>

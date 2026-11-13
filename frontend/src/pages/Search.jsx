@@ -42,6 +42,23 @@ export default function Search() {
     }
   };
 
+  const handleRenameAlbum = async (album) => {
+    const title = window.prompt("Enter a new album name", album.title);
+    if (title === null || !title.trim()) return;
+    try {
+      const { album: updatedAlbum } = await api.patch(`/albums/${album.id}`, { title });
+      setResults((previous) => ({
+        ...previous,
+        albums: previous.albums.map((item) => item.id === album.id ? updatedAlbum : item),
+        tracks: previous.tracks.map((track) =>
+          track.albumId === album.id ? { ...track, albumTitle: updatedAlbum.title } : track
+        ),
+      }));
+    } catch (err) {
+      setError(err.message || "Failed to rename album");
+    }
+  };
+
   useEffect(() => {
     const q = query.trim();
     const timeout = setTimeout(() => {
@@ -104,6 +121,7 @@ export default function Search() {
                 title={a.title}
                 subtitle={a.artistName}
                 onDelete={user ? () => handleDeleteAlbum(a) : undefined}
+                onRename={user ? () => handleRenameAlbum(a) : undefined}
               />
             ))}
           </div>
