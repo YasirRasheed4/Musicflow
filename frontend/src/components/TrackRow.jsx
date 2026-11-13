@@ -4,6 +4,7 @@ import { usePlayer } from "../context/PlayerContext";
 import { useFavorites } from "../context/FavoritesContext";
 import { useAuth } from "../context/AuthContext";
 import Waveform from "./Waveform";
+import SaveOfflineButton from "./SaveOfflineButton";
 import { formatTime } from "../format";
 
 export default function TrackRow({ track, index, queue, onAddToPlaylist, onRemove, onDelete }) {
@@ -85,6 +86,8 @@ export default function TrackRow({ track, index, queue, onAddToPlaylist, onRemov
         ) : (
           <span className="block w-8" />
         )}
+
+        <SaveOfflineButton track={track} />
 
         <span className="w-12 text-right font-mono text-sm text-muted">{formatTime(track.duration)}</span>
 
