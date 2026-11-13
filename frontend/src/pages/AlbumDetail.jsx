@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Pencil, Play, Trash2, UploadCloud } from "lucide-react";
+import OverflowMenu from "../components/OverflowMenu";
 import TrackRow from "../components/TrackRow";
 import AddToPlaylistModal from "../components/AddToPlaylistModal";
 import { api } from "../api";
@@ -80,6 +81,26 @@ export default function AlbumDetail() {
 
   if (!album) return null;
 
+  const albumActions = user
+    ? [
+        {
+          id: "change-cover",
+          label: uploadingCover ? "Uploading cover..." : "Change cover photo",
+          icon: UploadCloud,
+          onClick: () => coverInputRef.current?.click(),
+          disabled: uploadingCover,
+        },
+        { id: "rename", label: "Rename album", icon: Pencil, onClick: handleRenameAlbum },
+        {
+          id: "delete",
+          label: "Delete album",
+          icon: Trash2,
+          onClick: handleDeleteAlbum,
+          destructive: true,
+        },
+      ]
+    : [];
+
   return (
     <div className="flex flex-col gap-6 pb-10">
       {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
@@ -106,26 +127,7 @@ export default function AlbumDetail() {
                 onChange={handleCoverUpload}
                 className="hidden"
               />
-              <button
-                type="button"
-                onClick={() => coverInputRef.current?.click()}
-                disabled={uploadingCover}
-                className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink hover:bg-line disabled:opacity-50"
-              >
-                <UploadCloud size={16} /> {uploadingCover ? "Uploading cover..." : "Change cover photo"}
-              </button>
-              <button
-                onClick={handleRenameAlbum}
-                className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink hover:bg-line"
-              >
-                <Pencil size={16} /> Rename album
-              </button>
-              <button
-                onClick={handleDeleteAlbum}
-                className="flex items-center gap-2 rounded-full bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-400 hover:bg-rose-500/20"
-              >
-                <Trash2 size={16} /> Delete album
-              </button>
+              <OverflowMenu actions={albumActions} label="Album actions" />
             </div>
           )}
         </div>

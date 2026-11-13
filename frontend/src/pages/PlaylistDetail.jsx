@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import JSZip from "jszip";
 import { Pencil, Play, Plus, Trash2, Download, UploadCloud } from "lucide-react";
+import OverflowMenu from "../components/OverflowMenu";
 import TrackRow from "../components/TrackRow";
 import AddToPlaylistModal from "../components/AddToPlaylistModal";
 import ImportSpotifyModal from "../components/ImportSpotifyModal";
@@ -151,6 +152,38 @@ export default function PlaylistDetail() {
   if (!playlist) return error ? <p className="text-muted">{error}</p> : null;
 
   const coverUrl = playlist.coverUrl || tracks[0]?.coverUrl;
+  const playlistActions = [
+    ...(tracks.some((track) => track.isDownloadable)
+      ? [{
+          id: "download",
+          label: downloading ? "Preparing..." : "Download Playlist",
+          icon: Download,
+          onClick: handleDownload,
+          disabled: downloading,
+        }]
+      : []),
+    ...(canManagePlaylist
+      ? [
+          { id: "add-songs", label: "Add Songs", icon: Plus, onClick: () => setShowAddModal(true) },
+          {
+            id: "change-cover",
+            label: uploadingCover ? "Uploading cover..." : "Change cover photo",
+            icon: UploadCloud,
+            onClick: () => coverInputRef.current?.click(),
+            disabled: uploadingCover,
+          },
+          { id: "rename", label: "Rename Playlist", icon: Pencil, onClick: handleRename },
+          {
+            id: "delete",
+            label: deleting ? "Deleting..." : "Delete Playlist",
+            icon: Trash2,
+            onClick: handleDelete,
+            disabled: deleting,
+            destructive: true,
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div className="flex flex-col gap-6 pb-10">
@@ -182,23 +215,6 @@ export default function PlaylistDetail() {
                 <Play size={16} fill="currentColor" /> Play
               </button>
             )}
-            {tracks.some((track) => track.isDownloadable) && (
-              <button
-                onClick={handleDownload}
-                disabled={downloading}
-                className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink hover:bg-line transition disabled:opacity-50"
-              >
-                <Download size={16} /> {downloading ? "Preparing..." : "Download Playlist"}
-              </button>
-            )}
-            {canManagePlaylist && (
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink hover:bg-line transition"
-              >
-                <Plus size={16} /> Add Songs
-              </button>
-            )}
             {canManagePlaylist && (
               <>
                 <input
@@ -208,34 +224,9 @@ export default function PlaylistDetail() {
                   onChange={handleCoverUpload}
                   className="hidden"
                 />
-                <button
-                  type="button"
-                  onClick={() => coverInputRef.current?.click()}
-                  disabled={uploadingCover}
-                  className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink hover:bg-line transition disabled:opacity-50"
-                >
-                  <UploadCloud size={16} /> {uploadingCover ? "Uploading cover..." : "Change cover photo"}
-                </button>
               </>
             )}
-            {canManagePlaylist && (
-              <>
-                <button
-                  onClick={handleRename}
-                  className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink hover:bg-line transition"
-                >
-                  <Pencil size={16} /> Rename Playlist
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="flex items-center gap-2 rounded-full bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-400 hover:bg-rose-500/20 transition disabled:opacity-50"
-                  title="Delete playlist"
-                >
-                  <Trash2 size={16} /> {deleting ? "Deleting..." : "Delete Playlist"}
-                </button>
-              </>
-            )}
+            <OverflowMenu actions={playlistActions} label="Playlist actions" />
           </div>
         </div>
       </div>
