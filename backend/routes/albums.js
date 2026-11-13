@@ -48,6 +48,62 @@ router.get("/albums/:id", asyncHandler(async (req, res) => {
   res.json({ album: serialize.album(row), tracks });
 }));
 
+router.post("/albums/:id/playlist", requireAuth, asyncHandler(async (req, res) => {
+  const result = await db.transaction(async (connection) => {
+    const album = await connection.prepare("SELECT id, title FROM albums WHERE id = ?").get(req.params.id);
+    if (!album) return { status: 404 };
+
+    const trackIds = await connection
+      .prepare("SELECT id FROM tracks WHERE album_id = ? ORDER BY id")
+      .all(album.id);
+    if (!trackIds.length) return { status: 409 };
+
+    const existing = await connection.prepare(`
+      SELECT playlists.id
+      FROM playlists
+      WHERE playlists.user_id = ? AND playlists.name = ?
+        AND (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = playlists.id) = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM tracks
+          WHERE tracks.album_id = ?
+            AND NOT EXISTS (
+              SELECT 1 FROM playlist_tracks
+              WHERE playlist_tracks.playlist_id = playlists.id
+                AND playlist_tracks.track_id = tracks.id
+            )
+        )
+    `).get(req.user.id, album.title, trackIds.length, album.id);
+    if (existing) return { playlistId: existing.id, created: false };
+
+    const playlistResult = await connection
+      .prepare("INSERT INTO playlists (user_id, name) VALUES (?, ?)")
+      .run(req.user.id, album.title);
+    const playlistId = playlistResult.lastInsertRowid;
+    const insertTrack = connection.prepare(
+      "INSERT INTO playlist_tracks (playlist_id, track_id, sort_order) VALUES (?, ?, ?)"
+    );
+    for (const [sortOrder, track] of trackIds.entries()) {
+      await insertTrack.run(playlistId, track.id, sortOrder);
+    }
+    return { playlistId, created: true };
+  });
+
+  if (result.status === 404) return res.status(404).json({ error: "Album not found" });
+  if (result.status === 409) return res.status(409).json({ error: "This album has no songs to add to a playlist" });
+
+  const row = await db.prepare(`
+    SELECT playlists.*,
+      (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = playlists.id) AS track_count,
+      (SELECT tracks.cover_url FROM playlist_tracks
+       JOIN tracks ON tracks.id = playlist_tracks.track_id
+       WHERE playlist_tracks.playlist_id = playlists.id
+       ORDER BY playlist_tracks.sort_order LIMIT 1) AS track_cover_url
+    FROM playlists
+    WHERE playlists.id = ?
+  `).get(result.playlistId);
+  res.status(result.created ? 201 : 200).json({ playlist: serialize.playlist(row) });
+}));
+
 router.patch("/albums/:id", requireAuth, asyncHandler(async (req, res) => {
   const body = req.body || {};
   const hasTitle = Object.prototype.hasOwnProperty.call(body, "title");

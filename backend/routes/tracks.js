@@ -210,6 +210,8 @@ router.post("/tracks/upload", requireAuth, asyncHandler(async (req, res) => {
     base64Data,
     duration,
     playlistId,
+    playlistIds: requestedPlaylistIds,
+    createPlaylistName: requestedPlaylistName,
   } = req.body || {};
   if (typeof title !== "string" || !title.trim()) {
     return res.status(400).json({ error: "Song title is required" });
@@ -239,10 +241,32 @@ router.post("/tracks/upload", requireAuth, asyncHandler(async (req, res) => {
   if (audioData.length > MAX_AUDIO_UPLOAD_BYTES) {
     return res.status(413).json({ error: "Audio files must be 3 MB or smaller" });
   }
-  if (playlistId) {
+  if (requestedPlaylistIds !== undefined && !Array.isArray(requestedPlaylistIds)) {
+    return res.status(400).json({ error: "Playlist IDs must be provided as a list" });
+  }
+  const playlistIds = [];
+  for (const value of [
+    ...(requestedPlaylistIds || []),
+    ...(playlistId === undefined || playlistId === null || playlistId === "" ? [] : [playlistId]),
+  ]) {
+    const id = Number(value);
+    if (!Number.isInteger(id) || id < 1) {
+      return res.status(400).json({ error: "A valid playlist ID is required" });
+    }
+    if (!playlistIds.includes(id)) playlistIds.push(id);
+  }
+  const createPlaylistName = requestedPlaylistName === undefined
+    ? null
+    : typeof requestedPlaylistName === "string" && requestedPlaylistName.trim()
+      ? requestedPlaylistName.trim()
+      : null;
+  if (requestedPlaylistName !== undefined && !createPlaylistName) {
+    return res.status(400).json({ error: "Playlist name is required" });
+  }
+  for (const id of playlistIds) {
     const playlist = await db
       .prepare("SELECT id FROM playlists WHERE id = ? AND (user_id = ? OR is_default = 1)")
-      .get(playlistId, req.user.id);
+      .get(id, req.user.id);
     if (!playlist) return res.status(403).json({ error: "You don't have permission to add songs to this playlist" });
   }
 
@@ -252,7 +276,7 @@ router.post("/tracks/upload", requireAuth, asyncHandler(async (req, res) => {
   const cleanAlbumTitle = typeof albumTitle === "string" && albumTitle.trim()
     ? albumTitle.trim()
     : "Local Library";
-  const trackId = await db.transaction(async (connection) => {
+  const uploadResult = await db.transaction(async (connection) => {
     let artist = await connection
       .prepare("SELECT * FROM artists WHERE LOWER(name) = LOWER(?)")
       .get(cleanArtistName);
@@ -271,6 +295,14 @@ router.post("/tracks/upload", requireAuth, asyncHandler(async (req, res) => {
         .prepare("INSERT INTO albums (title, artist_id, cover_url) VALUES (?, ?, ?)")
         .run(cleanAlbumTitle, artist.id, "/covers/afterglow.png");
       album = await connection.prepare("SELECT * FROM albums WHERE id = ?").get(albRes.lastInsertRowid);
+    }
+
+    let createdPlaylistId = null;
+    if (createPlaylistName) {
+      const playlistResult = await connection
+        .prepare("INSERT INTO playlists (user_id, name) VALUES (?, ?)")
+        .run(req.user.id, createPlaylistName);
+      createdPlaylistId = playlistResult.lastInsertRowid;
     }
 
     const tRes = await connection
@@ -295,22 +327,29 @@ router.post("/tracks/upload", requireAuth, asyncHandler(async (req, res) => {
     await connection.prepare("UPDATE tracks SET audio_url = ? WHERE id = ?")
       .run(`/api/tracks/${newTrackId}/audio`, newTrackId);
 
-    if (playlistId) {
+    for (const id of [...playlistIds, ...(createdPlaylistId ? [createdPlaylistId] : [])]) {
       const { maxOrder } = await connection
         .prepare('SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM playlist_tracks WHERE playlist_id = ?')
-        .get(playlistId);
+        .get(id);
       await connection.prepare("INSERT IGNORE INTO playlist_tracks (playlist_id, track_id, sort_order) VALUES (?, ?, ?)").run(
-        playlistId,
+        id,
         newTrackId,
         maxOrder + 1
       );
     }
 
-    return newTrackId;
+    return { trackId: newTrackId, createdPlaylistId };
   });
 
-  const fullTrack = await db.prepare(`${TRACK_SELECT} WHERE tracks.id = ?`).get(trackId);
-  res.status(201).json({ track: serialize.track(fullTrack), message: "Track uploaded successfully!" });
+  const fullTrack = await db.prepare(`${TRACK_SELECT} WHERE tracks.id = ?`).get(uploadResult.trackId);
+  const createdPlaylist = uploadResult.createdPlaylistId
+    ? await db.prepare("SELECT * FROM playlists WHERE id = ?").get(uploadResult.createdPlaylistId)
+    : null;
+  res.status(201).json({
+    track: serialize.track(fullTrack),
+    ...(createdPlaylist ? { playlist: serialize.playlist(createdPlaylist) } : {}),
+    message: "Track uploaded successfully!",
+  });
 }));
 
 // Delete a track

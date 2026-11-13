@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, CloudDownload, Pencil, Play, Trash2, UploadCloud } from "lucide-react";
+import { Check, CloudDownload, ListPlus, Pencil, Play, Trash2, UploadCloud } from "lucide-react";
 import OverflowMenu from "../components/OverflowMenu";
 import TrackRow from "../components/TrackRow";
 import AddToPlaylistModal from "../components/AddToPlaylistModal";
@@ -9,6 +9,7 @@ import compressCoverImage from "../compressCoverImage";
 import { getAlbumOfflineStatus, saveAlbumOffline } from "../offline";
 import { usePlayer } from "../context/PlayerContext";
 import { useAuth } from "../context/AuthContext";
+import { usePlaylists } from "../context/PlaylistsContext";
 
 export default function AlbumDetail() {
   const { id } = useParams();
@@ -20,11 +21,13 @@ export default function AlbumDetail() {
   const [error, setError] = useState("");
   const [offlineStatus, setOfflineStatus] = useState({ totalCount: 0, availableCount: 0, savedCount: 0 });
   const [savingOffline, setSavingOffline] = useState(false);
+  const [addingAlbumPlaylist, setAddingAlbumPlaylist] = useState(false);
   const [offlineProgress, setOfflineProgress] = useState({ completed: 0, total: 0 });
   const [offlineNotice, setOfflineNotice] = useState(null);
   const coverInputRef = useRef(null);
   const { playTrack } = usePlayer();
   const { user } = useAuth();
+  const { refresh: refreshPlaylists } = usePlaylists();
 
   useEffect(() => {
     setAlbum(null);
@@ -55,6 +58,20 @@ export default function AlbumDetail() {
       navigate("/");
     } catch (err) {
       setError(err.message || "Failed to delete album");
+    }
+  };
+
+  const handleAddAlbumToPlaylists = async () => {
+    setAddingAlbumPlaylist(true);
+    setError("");
+    try {
+      const { playlist } = await api.post(`/albums/${album.id}/playlist`, {});
+      await refreshPlaylists();
+      navigate(`/playlists/${playlist.id}`);
+    } catch (err) {
+      setError(err.message || "Failed to add album to Playlists");
+    } finally {
+      setAddingAlbumPlaylist(false);
     }
   };
 
@@ -193,6 +210,17 @@ export default function AlbumDetail() {
             >
               <Play size={16} fill="currentColor" /> Play
             </button>
+            {user && (
+              <button
+                type="button"
+                onClick={handleAddAlbumToPlaylists}
+                disabled={addingAlbumPlaylist || !tracks.length}
+                className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+              >
+                <ListPlus size={16} />
+                {addingAlbumPlaylist ? "Adding playlist..." : "Add album to Playlists"}
+              </button>
+            )}
             {user && (
               <input
                 ref={coverInputRef}

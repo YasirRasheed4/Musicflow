@@ -280,6 +280,7 @@ export default function ImportSpotifyModal({
 
     const filesToUpload = [...selectedFiles];
     const failedFiles = [];
+    const albumPlaylists = new Map();
     let uploadedCount = 0;
     setError("");
     setSuccessMsg("");
@@ -290,17 +291,23 @@ export default function ImportSpotifyModal({
         setUploadProgress({ completed: index, total: filesToUpload.length, fileName: file.name });
         try {
           const base64Data = await readFileAsBase64(file);
-          await api.post("/tracks/upload", {
+          const albumTitle = fileAlbum.trim() || getFileAlbumName(file) || "Local Files";
+          const albumKey = albumTitle.toLowerCase();
+          const albumPlaylistId = albumPlaylists.get(albumKey);
+          const result = await api.post("/tracks/upload", {
             title: filesToUpload.length === 1
               ? fileTitle.trim()
               : file.name.replace(/\.[^/.]+$/, ""),
             artistName: fileArtist.trim() || "Local Artist",
-            albumTitle: fileAlbum.trim() || getFileAlbumName(file) || "Local Files",
+            albumTitle,
             fileName: file.name,
             contentType: file.type,
             base64Data,
-            playlistId: targetPlaylistId || undefined,
+            playlistId: albumPlaylistId,
+            playlistIds: targetPlaylistId ? [targetPlaylistId] : undefined,
+            createPlaylistName: albumPlaylistId ? undefined : albumTitle,
           });
+          if (result.playlist) albumPlaylists.set(albumKey, result.playlist.id);
           uploadedCount += 1;
         } catch (err) {
           failedFiles.push({ file, message: err.message || "Upload failed" });
@@ -702,6 +709,9 @@ export default function ImportSpotifyModal({
                 Song titles come from filenames. Folder names are used as album names unless you enter an album below.
               </p>
             )}
+            <p className="text-xs text-muted">
+              Each uploaded album also creates a playlist with the same name.
+            </p>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -728,14 +738,14 @@ export default function ImportSpotifyModal({
 
             {playlists.length > 0 && (
               <div>
-                <label className="block text-xs font-semibold text-muted">Add to Playlist (Optional)</label>
+                <label className="block text-xs font-semibold text-muted">Also add to an existing playlist (Optional)</label>
                 <select
                   value={targetPlaylistId}
                   onChange={(e) => setTargetPlaylistId(e.target.value)}
                   disabled={importing}
                   className="mt-1 w-full rounded-xl bg-surface2 px-3.5 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent"
                 >
-                  <option value="">Do not add to playlist</option>
+                  <option value="">Do not add to another playlist</option>
                   {playlists.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
