@@ -127,9 +127,10 @@ account does not own or collaborate on cannot be fetched past that limit.
 - Playlists: create, view, add/remove tracks, update cover art, public/private;
   shared default playlists can be managed by any signed-in user
 - Device uploads: upload individual files, multiple files, or a folder of MP3,
-  WAV, M4A/MP4 audio, FLAC, AAC, OGG, OPUS, or WEBM files (3 MB per file);
-  audio is stored persistently with the track record, and each uploaded album
-  gets a same-named playlist. Existing albums can be added from album details.
+  WAV, M4A/MP4 audio, FLAC, AAC, OGG, OPUS, or WEBM files (25 MB per file);
+  larger files use chunked uploads, audio is stored persistently with the track
+  record, and each uploaded album gets a same-named playlist. Existing albums
+  can be added from album details.
 - Spotify imports: public previews plus authorized, paginated playlist imports
   (up to 200 items)
 - Offline playback: save MusicFlow-hosted audio from an album's actions menu;

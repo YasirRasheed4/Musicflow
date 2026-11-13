@@ -54,6 +54,20 @@ if (process.env.DB_CLIENT === "sqlite") {
       content_type TEXT NOT NULL,
       audio_data BLOB NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS track_uploads (
+      id TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      file_size INTEGER NOT NULL,
+      chunk_count INTEGER NOT NULL,
+      metadata TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS track_upload_chunks (
+      upload_id TEXT NOT NULL REFERENCES track_uploads(id) ON DELETE CASCADE,
+      chunk_index INTEGER NOT NULL,
+      chunk_data BLOB NOT NULL,
+      PRIMARY KEY (upload_id, chunk_index)
+    );
     CREATE TABLE IF NOT EXISTS playlists (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL REFERENCES users(id),
@@ -328,6 +342,20 @@ if (process.env.DB_CLIENT === "sqlite") {
           track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
           content_type TEXT NOT NULL,
           audio_data BYTEA NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS track_uploads (
+          id TEXT PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          file_size BIGINT NOT NULL,
+          chunk_count INTEGER NOT NULL,
+          metadata TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS track_upload_chunks (
+          upload_id TEXT NOT NULL REFERENCES track_uploads(id) ON DELETE CASCADE,
+          chunk_index INTEGER NOT NULL,
+          chunk_data BYTEA NOT NULL,
+          PRIMARY KEY (upload_id, chunk_index)
         );
         CREATE TABLE IF NOT EXISTS playlists (
           id SERIAL PRIMARY KEY,

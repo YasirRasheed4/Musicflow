@@ -12,7 +12,9 @@ import {
   isSpotifyConfigured,
 } from "../spotifyAuth";
 
-const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+const MAX_SINGLE_REQUEST_UPLOAD_BYTES = 3 * 1024 * 1024;
+const DEFAULT_UPLOAD_CHUNK_BYTES = 2 * 1024 * 1024;
 const SUPPORTED_AUDIO_EXTENSIONS = new Set([
   "aac",
   "flac",
@@ -49,24 +51,50 @@ function getFileAlbumName(file) {
   return pathParts.length > 1 ? pathParts[pathParts.length - 2] : pathParts[0] || "";
 }
 
-function readFileAsBase64(file) {
+function readBlobAsBase64(blob, fileName) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result !== "string") {
-        reject(new Error(`Could not read "${file.name}".`));
+        reject(new Error(`Could not read "${fileName}".`));
         return;
       }
       const base64Data = reader.result.split(",")[1];
       if (!base64Data) {
-        reject(new Error(`"${file.name}" is empty or invalid.`));
+        reject(new Error(`"${fileName}" is empty or invalid.`));
         return;
       }
       resolve(base64Data);
     };
-    reader.onerror = () => reject(new Error(`Could not read "${file.name}".`));
-    reader.readAsDataURL(file);
+    reader.onerror = () => reject(new Error(`Could not read "${fileName}".`));
+    reader.readAsDataURL(blob);
   });
+}
+
+async function uploadAudioFile(file, metadata, onChunkProgress) {
+  if (file.size <= MAX_SINGLE_REQUEST_UPLOAD_BYTES) {
+    const base64Data = await readBlobAsBase64(file, file.name);
+    return api.post("/tracks/upload", { ...metadata, base64Data });
+  }
+
+  const session = await api.post("/tracks/upload/start", {
+    ...metadata,
+    fileSize: file.size,
+  });
+  const chunkSize = session.chunkSize || DEFAULT_UPLOAD_CHUNK_BYTES;
+  const chunkCount = Math.ceil(file.size / chunkSize);
+  for (let index = 0; index < chunkCount; index += 1) {
+    const start = index * chunkSize;
+    const end = Math.min(file.size, start + chunkSize);
+    const base64Data = await readBlobAsBase64(file.slice(start, end), file.name);
+    await api.post("/tracks/upload/chunk", {
+      uploadId: session.uploadId,
+      index,
+      base64Data,
+    });
+    onChunkProgress(index + 1, chunkCount);
+  }
+  return api.post("/tracks/upload/complete", { uploadId: session.uploadId });
 }
 
 export default function ImportSpotifyModal({
@@ -247,7 +275,7 @@ export default function ImportSpotifyModal({
       setSelectionNotice("");
       setError(
         supportedFiles.length
-          ? "Audio files must be 3 MB or smaller."
+          ? "Audio files must be 25 MB or smaller."
           : "No supported audio files were found in that selection."
       );
       return;
@@ -288,13 +316,21 @@ export default function ImportSpotifyModal({
 
     try {
       for (const [index, file] of filesToUpload.entries()) {
-        setUploadProgress({ completed: index, total: filesToUpload.length, fileName: file.name });
+        const chunkTotal = file.size > MAX_SINGLE_REQUEST_UPLOAD_BYTES
+          ? Math.ceil(file.size / DEFAULT_UPLOAD_CHUNK_BYTES)
+          : 1;
+        setUploadProgress({
+          completed: index,
+          total: filesToUpload.length,
+          fileName: file.name,
+          chunkCompleted: 0,
+          chunkTotal,
+        });
         try {
-          const base64Data = await readFileAsBase64(file);
           const albumTitle = fileAlbum.trim() || getFileAlbumName(file) || "Local Files";
           const albumKey = albumTitle.toLowerCase();
           const albumPlaylistId = albumPlaylists.get(albumKey);
-          const result = await api.post("/tracks/upload", {
+          const result = await uploadAudioFile(file, {
             title: filesToUpload.length === 1
               ? fileTitle.trim()
               : file.name.replace(/\.[^/.]+$/, ""),
@@ -302,10 +338,15 @@ export default function ImportSpotifyModal({
             albumTitle,
             fileName: file.name,
             contentType: file.type,
-            base64Data,
             playlistId: albumPlaylistId,
             playlistIds: targetPlaylistId ? [targetPlaylistId] : undefined,
             createPlaylistName: albumPlaylistId ? undefined : albumTitle,
+          }, (chunkCompleted, totalChunks) => {
+            setUploadProgress((previous) => ({
+              ...previous,
+              chunkCompleted,
+              chunkTotal: totalChunks,
+            }));
           });
           if (result.playlist) albumPlaylists.set(albumKey, result.playlist.id);
           uploadedCount += 1;
@@ -641,7 +682,7 @@ export default function ImportSpotifyModal({
                   : "Drop audio files here or choose a folder"}
               </p>
               <p className="text-xs text-muted">
-                MP3, WAV, M4A, MP4 audio, FLAC, AAC, OGG, OPUS, or WEBM · max 3 MB per file
+                MP3, WAV, M4A, MP4 audio, FLAC, AAC, OGG, OPUS, or WEBM · max 25 MB per file
               </p>
             </div>
             <input
@@ -688,6 +729,8 @@ export default function ImportSpotifyModal({
             {uploadProgress && (
               <p role="status" className="text-xs text-muted">
                 Uploading {Math.min(uploadProgress.completed + 1, uploadProgress.total)} of {uploadProgress.total}: {uploadProgress.fileName}
+                {uploadProgress.chunkTotal > 1 &&
+                  ` (chunk ${uploadProgress.chunkCompleted}/${uploadProgress.chunkTotal})`}
               </p>
             )}
 
