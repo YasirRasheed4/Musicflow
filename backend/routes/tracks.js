@@ -24,6 +24,7 @@ const AUDIO_TYPE_BY_EXTENSION = {
   aac: "audio/aac",
   flac: "audio/flac",
   m4a: "audio/mp4",
+  mp4: "audio/mp4",
   mp3: "audio/mpeg",
   ogg: "audio/ogg",
   opus: "audio/opus",

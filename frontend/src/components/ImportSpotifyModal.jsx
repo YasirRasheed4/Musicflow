@@ -13,11 +13,67 @@ import {
 } from "../spotifyAuth";
 
 const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
+const SUPPORTED_AUDIO_EXTENSIONS = new Set([
+  "aac",
+  "flac",
+  "m4a",
+  "mp3",
+  "mp4",
+  "ogg",
+  "opus",
+  "wav",
+  "webm",
+]);
+const SUPPORTED_AUDIO_TYPES = new Set([
+  "audio/aac",
+  "audio/flac",
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/mp4",
+  "audio/ogg",
+  "audio/opus",
+  "audio/wav",
+  "audio/webm",
+  "audio/x-flac",
+  "audio/x-m4a",
+  "audio/x-wav",
+]);
+
+function isSupportedAudioFile(file) {
+  const extension = file.name.split(".").pop().toLowerCase();
+  return SUPPORTED_AUDIO_EXTENSIONS.has(extension) || SUPPORTED_AUDIO_TYPES.has(file.type);
+}
+
+function getFileAlbumName(file) {
+  const pathParts = file.webkitRelativePath?.split("/").filter(Boolean) || [];
+  return pathParts.length > 1 ? pathParts[pathParts.length - 2] : pathParts[0] || "";
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        reject(new Error(`Could not read "${file.name}".`));
+        return;
+      }
+      const base64Data = reader.result.split(",")[1];
+      if (!base64Data) {
+        reject(new Error(`"${file.name}" is empty or invalid.`));
+        return;
+      }
+      resolve(base64Data);
+    };
+    reader.onerror = () => reject(new Error(`Could not read "${file.name}".`));
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function ImportSpotifyModal({ onClose, defaultPlaylistId, initialTab = "spotify" }) {
   const navigate = useNavigate();
   const { playlists, refresh } = usePlaylists();
   const fileInputRef = useRef(null);
+  const folderInputRef = useRef(null);
 
   const [activeTab, setActiveTab] = useState(initialTab);
   const [url, setUrl] = useState("");
@@ -32,10 +88,12 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId, initial
   const [connectingSpotify, setConnectingSpotify] = useState(false);
 
   // File Upload State
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [fileTitle, setFileTitle] = useState("");
   const [fileArtist, setFileArtist] = useState("");
   const [fileAlbum, setFileAlbum] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(null);
+  const [selectionNotice, setSelectionNotice] = useState("");
 
   // Custom song form state
   const [customTitle, setCustomTitle] = useState("");
@@ -169,77 +227,114 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId, initial
     }
   };
 
-  const selectAudioFile = (file, input) => {
-    if (!file) {
-      setSelectedFile(null);
+  const selectAudioFiles = (fileList, input) => {
+    const files = Array.from(fileList || []);
+    if (input) input.value = "";
+    if (!files.length) return;
+
+    const supportedFiles = files.filter(isSupportedAudioFile);
+    const selected = supportedFiles.filter((file) => file.size <= MAX_UPLOAD_BYTES);
+    const skippedCount = files.length - selected.length;
+    if (!selected.length) {
+      setSelectedFiles([]);
+      setSelectionNotice("");
+      setError(
+        supportedFiles.length
+          ? "Audio files must be 3 MB or smaller."
+          : "No supported audio files were found in that selection."
+      );
       return;
     }
-    if (file.size > MAX_UPLOAD_BYTES) {
-      setSelectedFile(null);
-      setError("Audio files must be 3 MB or smaller to upload.");
-      if (input) input.value = "";
-      return;
-    }
+
     setError("");
-    setSelectedFile(file);
-    const baseName = file.name.replace(/\.[^/.]+$/, "");
-    if (!fileTitle) setFileTitle(baseName);
+    setSelectedFiles(selected);
+    setFileTitle(selected.length === 1 ? selected[0].name.replace(/\.[^/.]+$/, "") : "");
+    setSelectionNotice(
+      skippedCount ? `Skipped ${skippedCount} unsupported or over-size file(s).` : ""
+    );
     if (!fileArtist) setFileArtist("Local Artist");
   };
 
   const handleFileSelect = (e) => {
-    selectAudioFile(e.target.files?.[0], e.target);
+    selectAudioFiles(e.target.files, e.target);
   };
 
   const handleFileDrop = (e) => {
     e.preventDefault();
-    selectAudioFile(e.dataTransfer.files?.[0]);
+    selectAudioFiles(e.dataTransfer.files);
   };
 
-  const handleUploadFile = async (e) => {
+  const handleUploadFiles = async (e) => {
     e.preventDefault();
-    if (!selectedFile || !fileTitle.trim()) {
-      setError("Please select an audio file and provide a title");
+    if (!selectedFiles.length || (selectedFiles.length === 1 && !fileTitle.trim())) {
+      setError("Select audio files before uploading.");
       return;
     }
+
+    const filesToUpload = [...selectedFiles];
+    const failedFiles = [];
+    let uploadedCount = 0;
     setError("");
+    setSuccessMsg("");
     setImporting(true);
 
     try {
-      const reader = new FileReader();
-      reader.onload = async () => {
+      for (const [index, file] of filesToUpload.entries()) {
+        setUploadProgress({ completed: index, total: filesToUpload.length, fileName: file.name });
         try {
-          if (typeof reader.result !== "string") throw new Error("Could not read the selected audio file.");
-          const base64Data = reader.result.split(",")[1];
-          if (!base64Data) throw new Error("The selected audio file is empty or invalid.");
-          const res = await api.post("/tracks/upload", {
-            title: fileTitle.trim(),
+          const base64Data = await readFileAsBase64(file);
+          await api.post("/tracks/upload", {
+            title: filesToUpload.length === 1
+              ? fileTitle.trim()
+              : file.name.replace(/\.[^/.]+$/, ""),
             artistName: fileArtist.trim() || "Local Artist",
-            albumTitle: fileAlbum.trim() || "Local Files",
-            fileName: selectedFile.name,
-            contentType: selectedFile.type,
+            albumTitle: fileAlbum.trim() || getFileAlbumName(file) || "Local Files",
+            fileName: file.name,
+            contentType: file.type,
             base64Data,
             playlistId: targetPlaylistId || undefined,
           });
-          await refresh();
-          setSuccessMsg(`Uploaded "${res.track.title}"!`);
-          setTimeout(() => {
-            onClose();
-            if (targetPlaylistId) navigate(`/playlists/${targetPlaylistId}`);
-          }, 1000);
+          uploadedCount += 1;
         } catch (err) {
-          setError(err.message || "Upload failed");
-          setImporting(false);
+          failedFiles.push({ file, message: err.message || "Upload failed" });
         }
-      };
-      reader.onerror = () => {
-        setError("Failed to read audio file");
-        setImporting(false);
-      };
-      reader.readAsDataURL(selectedFile);
-    } catch (err) {
-      setError(err.message || "Failed to upload file");
+      }
+
+      setSelectedFiles(failedFiles.map(({ file }) => file));
+      try {
+        await refresh();
+      } catch (err) {
+        setSuccessMsg(uploadedCount ? `Uploaded ${uploadedCount} song(s).` : "");
+        setError(`Uploaded files could not be refreshed in the library: ${err.message}`);
+        return;
+      }
+
+      if (failedFiles.length) {
+        const failedNames = failedFiles
+          .slice(0, 3)
+          .map(({ file, message }) => `${file.name} (${message})`)
+          .join(", ");
+        const remainingCount = failedFiles.length - 3;
+        setSuccessMsg(uploadedCount ? `Uploaded ${uploadedCount} song(s).` : "");
+        setError(
+          `Could not upload ${failedFiles.length} file(s): ${failedNames}` +
+          (remainingCount > 0 ? ` and ${remainingCount} more` : "") +
+          `. Retry will include only the failed files.`
+        );
+        if (failedFiles.length === 1) {
+          setFileTitle(failedFiles[0].file.name.replace(/\.[^/.]+$/, ""));
+        }
+        return;
+      }
+
+      setSuccessMsg(`Uploaded ${uploadedCount} song(s).`);
+      setTimeout(() => {
+        onClose();
+        if (targetPlaylistId) navigate(`/playlists/${targetPlaylistId}`);
+      }, 1000);
+    } finally {
       setImporting(false);
+      setUploadProgress(null);
     }
   };
 
@@ -506,9 +601,9 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId, initial
           </div>
         )}
 
-        {/* Upload MP3 Tab */}
+        {/* Upload from device */}
         {activeTab === "upload" && (
-          <form onSubmit={handleUploadFile} className="space-y-3">
+          <form onSubmit={handleUploadFiles} className="space-y-3">
             <div
               role="button"
               tabIndex={0}
@@ -525,29 +620,79 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId, initial
             >
               <UploadCloud size={32} className="mb-2 text-accent" />
               <p className="text-sm font-semibold text-ink">
-                {selectedFile ? selectedFile.name : "Click or drop an MP3/Audio file"}
+                {selectedFiles.length
+                  ? `${selectedFiles.length} audio file(s) selected`
+                  : "Drop audio files here or choose a folder"}
               </p>
-              <p className="text-xs text-muted">MP3, WAV, M4A, FLAC, AAC, OGG, OPUS, or WEBM · max 3 MB</p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="audio/*"
-                onChange={handleFileSelect}
-                onClick={(e) => e.stopPropagation()}
-                className="hidden"
-              />
+              <p className="text-xs text-muted">
+                MP3, WAV, M4A, MP4 audio, FLAC, AAC, OGG, OPUS, or WEBM · max 3 MB per file
+              </p>
             </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="audio/*,.mp4"
+              multiple
+              onChange={handleFileSelect}
+              onClick={(e) => e.stopPropagation()}
+              className="hidden"
+              disabled={importing}
+            />
+            <input
+              ref={folderInputRef}
+              type="file"
+              accept="audio/*,.mp4"
+              multiple
+              webkitdirectory=""
+              directory=""
+              onChange={handleFileSelect}
+              onClick={(e) => e.stopPropagation()}
+              className="hidden"
+              disabled={importing}
+            />
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+                className="rounded-lg bg-surface2 px-3 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+              >
+                Choose files
+              </button>
+              <button
+                type="button"
+                onClick={() => folderInputRef.current?.click()}
+                disabled={importing}
+                className="rounded-lg bg-surface2 px-3 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+              >
+                Choose folder
+              </button>
+            </div>
+            {selectionNotice && <p role="status" className="text-xs text-muted">{selectionNotice}</p>}
+            {uploadProgress && (
+              <p role="status" className="text-xs text-muted">
+                Uploading {Math.min(uploadProgress.completed + 1, uploadProgress.total)} of {uploadProgress.total}: {uploadProgress.fileName}
+              </p>
+            )}
 
-            <div>
-              <label className="block text-xs font-semibold text-muted">Song Title *</label>
-              <input
-                required
-                value={fileTitle}
-                onChange={(e) => setFileTitle(e.target.value)}
-                placeholder="Song Title"
-                className="mt-1 w-full rounded-xl bg-surface2 px-3.5 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent"
-              />
-            </div>
+            {selectedFiles.length === 1 && (
+              <div>
+                <label className="block text-xs font-semibold text-muted">Song Title *</label>
+                <input
+                  required
+                  value={fileTitle}
+                  onChange={(e) => setFileTitle(e.target.value)}
+                  placeholder="Song Title"
+                  disabled={importing}
+                  className="mt-1 w-full rounded-xl bg-surface2 px-3.5 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+            )}
+            {selectedFiles.length > 1 && (
+              <p className="text-xs text-muted">
+                Song titles come from filenames. Folder names are used as album names unless you enter an album below.
+              </p>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -556,6 +701,7 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId, initial
                   value={fileArtist}
                   onChange={(e) => setFileArtist(e.target.value)}
                   placeholder="Artist"
+                  disabled={importing}
                   className="mt-1 w-full rounded-xl bg-surface2 px-3.5 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent"
                 />
               </div>
@@ -564,7 +710,8 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId, initial
                 <input
                   value={fileAlbum}
                   onChange={(e) => setFileAlbum(e.target.value)}
-                  placeholder="Album"
+                  placeholder="Use folder names"
+                  disabled={importing}
                   className="mt-1 w-full rounded-xl bg-surface2 px-3.5 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent"
                 />
               </div>
@@ -576,6 +723,7 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId, initial
                 <select
                   value={targetPlaylistId}
                   onChange={(e) => setTargetPlaylistId(e.target.value)}
+                  disabled={importing}
                   className="mt-1 w-full rounded-xl bg-surface2 px-3.5 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent"
                 >
                   <option value="">Do not add to playlist</option>
@@ -590,11 +738,19 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId, initial
 
             <button
               type="submit"
-              disabled={importing || !selectedFile || !fileTitle.trim()}
+              disabled={
+                importing ||
+                !selectedFiles.length ||
+                (selectedFiles.length === 1 && !fileTitle.trim())
+              }
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-2.5 font-semibold text-bg transition hover:opacity-90 disabled:opacity-50"
             >
               {importing ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={18} />}
-              Upload song
+              {importing
+                ? "Uploading folder..."
+                : selectedFiles.length
+                  ? `Upload ${selectedFiles.length} song(s)`
+                  : "Upload songs"}
             </button>
           </form>
         )}
