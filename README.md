@@ -48,7 +48,7 @@ cd backend
 npm install
 # In PowerShell, select local SQLite before starting or seeding:
 $env:DB_CLIENT = "sqlite"
-npm run seed      # adds demo data only when the catalog is empty
+npm run seed      # adds the sample catalog only when the catalog is empty
 npm start          # http://localhost:4000
 
 # 2. Frontend (separate terminal)
@@ -57,15 +57,10 @@ npm install
 npm run dev         # http://localhost:5173
 ```
 
-Open http://localhost:5173. Log in with the seeded demo account:
+Open http://localhost:5173 and create an account from the Sign up page.
 
-- **Email:** demo@musicflow.app
-- **Password:** demo1234
-
-Or create your own account from the Sign up page.
-
-The demo data is inserted only when the database has no artists. `npm run seed`
-does not delete or reset existing data.
+The sample catalog is inserted only when the database has no artists.
+`npm run seed` does not delete or reset existing data.
 
 ## Deploying the full app to Vercel
 
@@ -82,7 +77,7 @@ Install a PostgreSQL database integration such as Neon from Vercel's
 Marketplace, connect it to this Vercel project, and make its PostgreSQL
 connection URL available to the backend as `DATABASE_URL` or `POSTGRES_URL`.
 Set `NODE_ENV=production` and a private `JWT_SECRET` for the backend. On the
-first API request, the backend creates its tables and inserts the demo catalog
+first API request, the backend creates its tables and inserts the sample catalog
 if the catalog is empty; no SQL import is required. Vercel service bindings
 are not needed: the browser calls the public `/api/*` route. Do not use the
 local SQLite database for production.
@@ -148,7 +143,7 @@ account does not own or collaborate on cannot be fetched past that limit.
 ```
 backend/
   db.js               PostgreSQL/SQLite database adapter
-  seed.js            Populates the mock catalog + demo account
+  seed.js            Populates the mock catalog
   server.js           Express app entry point
   middleware/auth.js  JWT sign/verify
   routes/              auth, tracks (+search), albums, artists, playlists, favorites

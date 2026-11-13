@@ -125,10 +125,6 @@ CREATE TABLE `favorites` (
   CONSTRAINT `fk_favorites_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO `favorites` (`user_id`, `track_id`, `created_at`) VALUES (2, 4, '2026-08-27 10:09:41');
-INSERT INTO `favorites` (`user_id`, `track_id`, `created_at`) VALUES (2, 11, '2026-08-27 10:09:41');
-INSERT INTO `favorites` (`user_id`, `track_id`, `created_at`) VALUES (2, 10, '2026-08-27 10:09:41');
-
 DROP TABLE IF EXISTS `playback_history`;
 CREATE TABLE `playback_history` (
   `id` INT AUTO_INCREMENT NOT NULL,
@@ -150,66 +146,6 @@ CREATE TABLE `playlist_tracks` (
   CONSTRAINT `fk_playlist_tracks_1` FOREIGN KEY (`playlist_id`) REFERENCES `playlists` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (1, 1, 0);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (1, 2, 1);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (1, 3, 2);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (1, 9, 3);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (1, 5, 4);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (2, 6, 0);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (2, 7, 1);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (2, 8, 2);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (2, 12, 3);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 14, 0);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 15, 1);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 16, 2);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 17, 3);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 18, 4);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 19, 5);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 20, 6);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 21, 7);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 22, 8);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 23, 9);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 24, 10);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 25, 11);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 26, 12);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 27, 13);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 28, 14);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 29, 15);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 30, 16);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 31, 17);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 32, 18);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 33, 19);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 34, 20);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 35, 21);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 36, 22);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 37, 23);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 38, 24);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 39, 25);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 40, 26);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 41, 27);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 42, 28);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 43, 29);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 44, 30);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 45, 31);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 46, 32);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 47, 33);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 48, 34);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 49, 35);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 50, 36);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 51, 37);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 52, 38);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 53, 39);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 54, 40);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 55, 41);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 56, 42);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 57, 43);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 58, 44);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 59, 45);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 60, 46);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 61, 47);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 62, 48);
-INSERT INTO `playlist_tracks` (`playlist_id`, `track_id`, `sort_order`) VALUES (3, 63, 49);
-
 DROP TABLE IF EXISTS `playlists`;
 CREATE TABLE `playlists` (
   `id` INT AUTO_INCREMENT NOT NULL,
@@ -221,10 +157,6 @@ CREATE TABLE `playlists` (
   PRIMARY KEY (`id`),
   CONSTRAINT `fk_playlists_0` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-INSERT INTO `playlists` (`id`, `user_id`, `name`, `description`, `is_public`, `created_at`) VALUES (1, 2, 'Late Night Drive', 'For when the city''s asleep and you''re not.', 1, '2026-08-27 10:09:41');
-INSERT INTO `playlists` (`id`, `user_id`, `name`, `description`, `is_public`, `created_at`) VALUES (2, 2, 'Quiet Mornings', 'Slow coffee, soft light.', 1, '2026-08-27 10:09:41');
-INSERT INTO `playlists` (`id`, `user_id`, `name`, `description`, `is_public`, `created_at`) VALUES (3, 2, 'My Spotify Top Hits', 'Spotify', 1, '2026-08-27 10:26:08');
 
 DROP TABLE IF EXISTS `tracks`;
 CREATE TABLE `tracks` (
@@ -321,7 +253,5 @@ CREATE TABLE `users` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `sqlite_autoindex_users_1` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-INSERT INTO `users` (`id`, `name`, `email`, `password_hash`, `role`, `subscription_status`, `created_at`) VALUES (2, 'Demo Listener', 'demo@musicflow.app', '$2a$10$IMi8.JbjaMo/tZkyHqnYyuL0WjxMjWPgSQ2hpOHR.mnPvVZwTI4Qi', 'listener', 'free', '2026-08-27 10:09:41');
 
 SET FOREIGN_KEY_CHECKS = 1;

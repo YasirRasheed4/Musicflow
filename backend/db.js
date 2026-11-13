@@ -82,6 +82,10 @@ if (process.env.DB_CLIENT === "sqlite") {
       played_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       duration_listened INTEGER NOT NULL DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS app_migrations (
+      name TEXT PRIMARY KEY,
+      applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   const playlistColumns = connection.prepare("PRAGMA table_info(playlists)").all();
@@ -91,15 +95,31 @@ if (process.env.DB_CLIENT === "sqlite") {
   if (!playlistColumns.some((column) => column.name === "is_default")) {
     connection.exec("ALTER TABLE playlists ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0");
   }
-  connection.prepare(`
-    UPDATE playlists
-    SET is_default = 1
-    WHERE user_id = (SELECT id FROM users WHERE email = 'demo@musicflow.app')
-      AND (
-        (name = 'Late Night Drive' AND description = 'For when the city''s asleep and you''re not.')
-        OR (name = 'Quiet Mornings' AND description = 'Slow coffee, soft light.')
-      )
-  `).run();
+  const demoAccountMigration = "remove-demo-listener";
+  const demoAccountMigrationApplied = connection
+    .prepare("SELECT name FROM app_migrations WHERE name = ?")
+    .get(demoAccountMigration);
+  if (!demoAccountMigrationApplied) {
+    connection.exec("BEGIN");
+    try {
+      connection.prepare(`
+        DELETE FROM playlist_tracks
+        WHERE playlist_id IN (
+          SELECT id FROM playlists
+          WHERE user_id IN (SELECT id FROM users WHERE email = 'demo@musicflow.app')
+        )
+      `).run();
+      connection.prepare("DELETE FROM favorites WHERE user_id IN (SELECT id FROM users WHERE email = ?)").run("demo@musicflow.app");
+      connection.prepare("DELETE FROM playback_history WHERE user_id IN (SELECT id FROM users WHERE email = ?)").run("demo@musicflow.app");
+      connection.prepare("DELETE FROM playlists WHERE user_id IN (SELECT id FROM users WHERE email = ?)").run("demo@musicflow.app");
+      connection.prepare("DELETE FROM users WHERE email = ?").run("demo@musicflow.app");
+      connection.prepare("INSERT INTO app_migrations (name) VALUES (?)").run(demoAccountMigration);
+      connection.exec("COMMIT");
+    } catch (error) {
+      connection.exec("ROLLBACK");
+      throw error;
+    }
+  }
 
   function prepare(sql) {
     const statement = connection.prepare(
@@ -230,13 +250,6 @@ if (process.env.DB_CLIENT === "sqlite") {
         );
         ALTER TABLE playlists ADD COLUMN IF NOT EXISTS cover_url TEXT;
         ALTER TABLE playlists ADD COLUMN IF NOT EXISTS is_default INTEGER NOT NULL DEFAULT 0;
-        UPDATE playlists
-        SET is_default = 1
-        WHERE user_id = (SELECT id FROM users WHERE email = 'demo@musicflow.app')
-          AND (
-            (name = 'Late Night Drive' AND description = 'For when the city''s asleep and you''re not.')
-            OR (name = 'Quiet Mornings' AND description = 'Slow coffee, soft light.')
-          );
         CREATE TABLE IF NOT EXISTS rotation_albums (
           album_id INTEGER PRIMARY KEY REFERENCES albums(id),
           sort_order INTEGER NOT NULL DEFAULT 0
@@ -260,7 +273,30 @@ if (process.env.DB_CLIENT === "sqlite") {
           played_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
           duration_listened INTEGER NOT NULL DEFAULT 0
         );
-      `);
+        CREATE TABLE IF NOT EXISTS app_migrations (
+          name TEXT PRIMARY KEY,
+          applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+      `).then(() =>
+        transaction(async (connection) => {
+          const migrationName = "remove-demo-listener";
+          const applied = await connection.prepare("SELECT name FROM app_migrations WHERE name = ?").get(migrationName);
+          if (applied) return;
+
+          await connection.prepare(`
+            DELETE FROM playlist_tracks
+            WHERE playlist_id IN (
+              SELECT id FROM playlists
+              WHERE user_id IN (SELECT id FROM users WHERE email = ?)
+            )
+          `).run("demo@musicflow.app");
+          await connection.prepare("DELETE FROM favorites WHERE user_id IN (SELECT id FROM users WHERE email = ?)").run("demo@musicflow.app");
+          await connection.prepare("DELETE FROM playback_history WHERE user_id IN (SELECT id FROM users WHERE email = ?)").run("demo@musicflow.app");
+          await connection.prepare("DELETE FROM playlists WHERE user_id IN (SELECT id FROM users WHERE email = ?)").run("demo@musicflow.app");
+          await connection.prepare("DELETE FROM users WHERE email = ?").run("demo@musicflow.app");
+          await connection.prepare("INSERT IGNORE INTO app_migrations (name) VALUES (?)").run(migrationName);
+        })
+      );
       initialization = initialization.catch((error) => {
         initialization = undefined;
         throw error;

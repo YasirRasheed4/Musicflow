@@ -1,6 +1,5 @@
 require("dotenv").config();
 
-const bcrypt = require("bcryptjs");
 const db = require("./db");
 
 const artistsData = [
@@ -62,14 +61,13 @@ async function seedData() {
       albums[albumKeys[index]] = result.lastInsertRowid;
     }
 
-    const trackIds = {};
     const insertTrack = connection.prepare(`
       INSERT INTO tracks
         (title, artist_id, album_id, duration, audio_url, cover_url, genre_tags, mood_tags, is_downloadable, is_explicit, release_date)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
     `);
     for (const [title, artistKey, albumKey, duration, audioFile, coverFile, genres, moods, downloadable, releaseDate] of tracksData) {
-      const result = await insertTrack.run(
+      await insertTrack.run(
         title,
         artists[artistKey],
         albums[albumKey],
@@ -81,38 +79,12 @@ async function seedData() {
         downloadable,
         releaseDate
       );
-      trackIds[title] = result.lastInsertRowid;
     }
 
-    const passwordHash = bcrypt.hashSync("demo1234", 10);
-    const userResult = await connection
-      .prepare("INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)")
-      .run("Demo Listener", "demo@musicflow.app", passwordHash);
-    const userId = userResult.lastInsertRowid;
-
-    const addPlaylist = connection.prepare(
-      "INSERT INTO playlists (user_id, name, description, is_public, is_default) VALUES (?, ?, ?, 1, 1)"
-    );
-    const addPlaylistTrack = connection.prepare(
-      "INSERT INTO playlist_tracks (playlist_id, track_id, sort_order) VALUES (?, ?, ?)"
-    );
-    const lateNight = await addPlaylist.run(userId, "Late Night Drive", "For when the city's asleep and you're not.");
-    for (const [index, title] of ["Neon Tide", "Chrome Horizon", "Night Drive", "3AM Static", "Static Bloom"].entries()) {
-      await addPlaylistTrack.run(lateNight.lastInsertRowid, trackIds[title], index);
-    }
-    const quietMornings = await addPlaylist.run(userId, "Quiet Mornings", "Slow coffee, soft light.");
-    for (const [index, title] of ["Quiet Hollow", "Pine and Ash", "Slow River", "Umbrella Song"].entries()) {
-      await addPlaylistTrack.run(quietMornings.lastInsertRowid, trackIds[title], index);
-    }
-
-    const addFavorite = connection.prepare("INSERT INTO favorites (user_id, track_id) VALUES (?, ?)");
-    for (const title of ["Afterglow", "Paper Weather", "Dial Tone Dreams"]) {
-      await addFavorite.run(userId, trackIds[title]);
-    }
     return true;
   });
 
-  if (initialized) console.log("Seeded MusicFlow demo data.");
+  if (initialized) console.log("Seeded MusicFlow catalog.");
 }
 
 let seedPromise;

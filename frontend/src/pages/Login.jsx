@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Eye, EyeOff, ArrowRight, Sparkles, Moon, Sun, Settings, Mail, Lock } from "lucide-react";
+import { Eye, EyeOff, Moon, Sun, Settings, Mail } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import MusicFlowIcon from "../components/MusicFlowIcon";
@@ -10,8 +10,8 @@ export default function Login() {
   const { theme, cycleTheme } = useTheme();
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState("demo@musicflow.app");
-  const [password, setPassword] = useState("demo1234");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,19 +25,6 @@ export default function Login() {
       navigate("/");
     } catch (err) {
       setError(err.message || "Failed to log in");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDemoLogin = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      await login("demo@musicflow.app", "demo1234");
-      navigate("/");
-    } catch (err) {
-      setError(err.message || "Demo login failed");
     } finally {
       setLoading(false);
     }
@@ -79,35 +66,6 @@ export default function Login() {
           </div>
           <h1 className="font-display text-2xl font-bold text-ink">Welcome to MusicFlow</h1>
           <p className="mt-1 text-xs text-muted">Full-length music · Spotify import · Playlists</p>
-        </div>
-
-        {/* Demo login banner */}
-        <div
-          className="mb-5 rounded-2xl border p-4 text-center"
-          style={{ background: "color-mix(in srgb, var(--color-accent) 10%, transparent)", borderColor: "color-mix(in srgb, var(--color-accent) 30%, transparent)" }}
-        >
-          <div className="flex items-center justify-center gap-1.5 text-xs font-bold" style={{ color: "var(--color-accent)" }}>
-            <Sparkles size={14} /> 1-Click Demo Access
-          </div>
-          <p className="mt-1 text-[11px] text-muted">Seeded playlists, full audio, and all features enabled</p>
-          <button
-            type="button"
-            onClick={handleDemoLogin}
-            disabled={loading}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2 text-xs font-bold transition hover:opacity-90 disabled:opacity-50"
-            style={{ background: "var(--color-accent)", color: "var(--color-bg)" }}
-          >
-            Sign in as Demo Listener <ArrowRight size={13} />
-          </button>
-        </div>
-
-        {/* Divider */}
-        <div className="relative my-4 flex items-center">
-          <div className="flex-1 border-t" style={{ borderColor: "var(--color-line)" }} />
-          <span className="px-3 text-[11px] font-semibold uppercase tracking-wider text-muted" style={{ background: "var(--color-surface)" }}>
-            or sign in
-          </span>
-          <div className="flex-1 border-t" style={{ borderColor: "var(--color-line)" }} />
         </div>
 
         {error && (

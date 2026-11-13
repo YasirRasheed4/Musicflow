@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const db = require("../db");
 
 // In a real deployment this must come from an environment variable.
 // A fixed fallback is fine for local development only.
@@ -17,15 +18,22 @@ function signToken(user) {
 }
 
 // Requires a valid token. Rejects the request if missing/invalid.
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: "Sign in to continue" });
   try {
     req.user = jwt.verify(token, JWT_SECRET);
-    next();
   } catch {
     return res.status(401).json({ error: "Your session expired — sign in again" });
+  }
+
+  try {
+    const user = await db.prepare("SELECT id FROM users WHERE id = ?").get(req.user.id);
+    if (!user) return res.status(401).json({ error: "Your account is no longer available" });
+    return next();
+  } catch (error) {
+    return next(error);
   }
 }
 
