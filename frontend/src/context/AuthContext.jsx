@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { api, getToken, setToken } from "../api";
+import { disconnectSpotify } from "../spotifyAuth";
 
 const AuthContext = createContext(null);
 
@@ -35,6 +36,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => {
     setToken(null);
+    disconnectSpotify();
     setUser(null);
   }, []);
 

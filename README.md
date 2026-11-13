@@ -90,6 +90,34 @@ error in Vercel, set `DATABASE_SSL_NO_VERIFY=true` on the backend service and
 redeploy. This retains encrypted TLS but disables certificate identity
 verification; only use it for the Supabase connection when required.
 
+### Enable Spotify playlists over 100 tracks
+
+Spotify's public embed only provides the first 100 playlist items. To import
+up to 200, MusicFlow uses Spotify's Web API with the playlist owner's or a
+collaborator's Spotify account. The Spotify connection is authorized with
+PKCE; MusicFlow does not need or use the app's client secret.
+
+1. Sign in to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard/)
+   and create a Web API app.
+2. In the app settings, add this exact redirect URI:
+   `https://music-flow-app.vercel.app/spotify/callback`
+   For local development, also add
+   `http://localhost:5173/spotify/callback`.
+3. Copy the app's **Client ID** (never the Client Secret) and add it to the
+   Vercel frontend service as `VITE_SPOTIFY_CLIENT_ID`, then redeploy. For
+   local development, set the same variable in `frontend/.env.local`.
+4. If the Spotify app is in Development Mode, add the Spotify account that
+   owns or collaborates on the playlist as an allowed user in the Spotify
+   Developer Dashboard. Development Mode has user limits; request a quota
+   extension from Spotify if this should be available to a wider audience.
+5. In MusicFlow, choose **Connect Spotify**, approve playlist read access, and
+   preview/import the playlist. The connection is held only in the current
+   browser session. Playlists with more than 200 items import the first 200.
+
+Without this setup, Spotify's public embed remains available, but it can only
+provide up to 100 playlist items. A public playlist that the connected Spotify
+account does not own or collaborate on cannot be fetched past that limit.
+
 ## What's implemented
 
 - Sign up / log in / session persistence (JWT)
@@ -98,6 +126,8 @@ verification; only use it for the Supabase connection when required.
 - Playback: persistent player bar, queue, seek, volume, skip — survives page navigation
 - Favorites (heart any track)
 - Playlists: create, view, add tracks from anywhere, remove tracks, public/private
+- Spotify imports: public previews plus authorized, paginated playlist imports
+  (up to 200 items)
 - Downloads: tracks flagged `is_downloadable` show a direct download link; others don't
 
 ## What's not built yet (Phase 2/3 in the PRD)

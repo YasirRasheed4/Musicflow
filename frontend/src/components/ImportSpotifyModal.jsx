@@ -4,6 +4,13 @@ import { X, Sparkles, Music, Loader2, Plus, CheckCircle, UploadCloud, Radio } fr
 import { api } from "../api";
 import { usePlaylists } from "../context/PlaylistsContext";
 import { formatTime } from "../format";
+import {
+  beginSpotifyAuthorization,
+  finishSpotifyAuthorization,
+  getSpotifyAccessToken,
+  hasSpotifySession,
+  isSpotifyConfigured,
+} from "../spotifyAuth";
 
 export default function ImportSpotifyModal({ onClose, defaultPlaylistId }) {
   const navigate = useNavigate();
@@ -19,6 +26,8 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId }) {
   const [customName, setCustomName] = useState("");
   const [isPublic, setIsPublic] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [spotifyConnected, setSpotifyConnected] = useState(hasSpotifySession());
+  const [connectingSpotify, setConnectingSpotify] = useState(false);
 
   // File Upload State
   const [selectedFile, setSelectedFile] = useState(null);
@@ -34,7 +43,7 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId }) {
   const [customCoverUrl, setCustomCoverUrl] = useState("");
   const [targetPlaylistId, setTargetPlaylistId] = useState(defaultPlaylistId || "");
 
-  const handlePreview = async (inputUrl) => {
+  const handlePreview = async (inputUrl, connectedToken) => {
     const targetUrl = inputUrl || url;
     if (!targetUrl.trim()) {
       setError("Please paste a Spotify URL or URI");
@@ -45,7 +54,11 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId }) {
     setLoadingPreview(true);
 
     try {
-      const res = await api.post("/spotify/preview", { url: targetUrl.trim() });
+      const spotifyToken = connectedToken || await getSpotifyAccessToken();
+      const options = spotifyToken
+        ? { headers: { "X-Spotify-Access-Token": spotifyToken } }
+        : {};
+      const res = await api.post("/spotify/preview", { url: targetUrl.trim() }, options);
       setPreview(res);
       setCustomName(res.name || res.title || "");
     } catch (err) {
@@ -56,6 +69,63 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId }) {
     }
   };
 
+  const handleConnectSpotify = async () => {
+    setError("");
+    setConnectingSpotify(true);
+    let popup;
+    let pollId;
+    let timeoutId;
+
+    try {
+      popup = await beginSpotifyAuthorization();
+      const spotifyToken = await new Promise((resolve, reject) => {
+        let finished = false;
+        const cleanup = () => {
+          window.removeEventListener("message", handleMessage);
+          window.clearInterval(pollId);
+          window.clearTimeout(timeoutId);
+        };
+        const finish = (callback, value) => {
+          if (finished) return;
+          finished = true;
+          cleanup();
+          callback(value);
+        };
+        const handleMessage = async (event) => {
+          if (
+            event.origin !== window.location.origin ||
+            event.source !== popup ||
+            event.data?.type !== "musicflow-spotify-oauth"
+          ) {
+            return;
+          }
+          try {
+            finish(resolve, await finishSpotifyAuthorization(event.data));
+          } catch (error) {
+            finish(reject, error);
+          }
+        };
+
+        window.addEventListener("message", handleMessage);
+        pollId = window.setInterval(() => {
+          if (popup.closed) finish(reject, new Error("Spotify sign-in was closed before it finished."));
+        }, 500);
+        timeoutId = window.setTimeout(
+          () => finish(reject, new Error("Spotify sign-in timed out. Please try again.")),
+          5 * 60 * 1000
+        );
+      });
+
+      setSpotifyConnected(true);
+      if (url.trim()) await handlePreview(url.trim(), spotifyToken);
+    } catch (err) {
+      if (popup && !popup.closed) popup.close();
+      setError(err.message || "Could not connect to Spotify.");
+    } finally {
+      setConnectingSpotify(false);
+    }
+  };
+
   const handleImportSpotify = async () => {
     if (!preview) return;
     setError("");
@@ -63,11 +133,15 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId }) {
 
     try {
       if (preview.type === "playlist" || preview.type === "album") {
+        const spotifyToken = preview.type === "playlist" ? await getSpotifyAccessToken() : null;
+        const options = spotifyToken
+          ? { headers: { "X-Spotify-Access-Token": spotifyToken } }
+          : {};
         const res = await api.post("/spotify/import-playlist", {
           url: url.trim(),
           name: customName.trim() || preview.name,
           isPublic,
-        });
+        }, options);
         await refresh();
         setSuccessMsg(`Successfully imported "${res.playlist.name}" with full-length playback!`);
         setTimeout(() => {
@@ -293,6 +367,23 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId }) {
                 </button>
               </div>
             </div>
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-surface2/60 p-3">
+              <p className="text-xs text-muted">
+                {spotifyConnected
+                  ? "Spotify connected for this browser session."
+                  : isSpotifyConfigured()
+                    ? "Connect Spotify to import playlists with more than 100 tracks."
+                    : "Spotify API setup is required to import more than 100 tracks."}
+              </p>
+              <button
+                type="button"
+                onClick={handleConnectSpotify}
+                disabled={!isSpotifyConfigured() || connectingSpotify}
+                className="shrink-0 rounded-lg bg-surface px-3 py-2 text-xs font-semibold text-ink hover:bg-line disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {connectingSpotify ? "Connecting..." : spotifyConnected ? "Reconnect" : "Connect Spotify"}
+              </button>
+            </div>
 
             {/* Preview Box */}
             {preview && (
@@ -315,7 +406,9 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId }) {
                     </p>
                     {preview.trackCount !== undefined && (
                       <p className="mt-1 text-xs font-medium text-emerald-400">
-                        {preview.trackCount} full songs ready to import
+                        {preview.tracksTruncated
+                          ? `First ${preview.trackCount} of ${preview.sourceTrackCount} items ready (200-track maximum)`
+                          : `${preview.trackCount} tracks ready to import`}
                       </p>
                     )}
                   </div>

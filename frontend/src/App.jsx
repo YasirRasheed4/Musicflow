@@ -16,6 +16,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import AlbumDetail from "./pages/AlbumDetail";
 import PlaylistDetail from "./pages/PlaylistDetail";
+import SpotifyOAuthCallback from "./pages/SpotifyOAuthCallback";
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
                         <Route path="/settings" element={<Settings />} />
                         <Route path="/albums/:id" element={<AlbumDetail />} />
                         <Route path="/playlists/:id" element={<PlaylistDetail />} />
+                        <Route path="/spotify/callback" element={<SpotifyOAuthCallback />} />
                         <Route path="/login" element={<Login />} />
                         <Route path="/signup" element={<Signup />} />
                       </Routes>

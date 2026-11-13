@@ -36,6 +36,8 @@ const DEFAULT_AUDIO_FALLBACKS = [
   "/audio/quiet-hollow.wav",
   "/audio/slow-river.wav",
 ];
+const MAX_PLAYLIST_TRACKS = 200;
+const SPOTIFY_API_BASE = "https://api.spotify.com/v1";
 
 function getRandomFallbackAudio() {
   const index = Math.floor(Math.random() * DEFAULT_AUDIO_FALLBACKS.length);
@@ -69,7 +71,75 @@ async function fetchEmbedData(type, id) {
   return JSON.parse(jsonStr);
 }
 
-async function getSpotifyPlaylist(id) {
+async function fetchSpotifyApi(url, accessToken) {
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error(`Spotify API returned an invalid response (${response.status})`);
+  }
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("Your Spotify connection expired. Reconnect Spotify and try again.");
+    }
+    if (response.status === 403) {
+      throw new Error("Spotify only allows the playlist owner or a collaborator to import its tracks.");
+    }
+    throw new Error(data.error?.message || `Spotify API request failed (${response.status})`);
+  }
+  return data;
+}
+
+async function fetchAuthorizedPlaylistTracks(id, accessToken, playlistName, coverUrl) {
+  const tracks = [];
+  let offset = 0;
+  let total = 0;
+
+  while (offset < MAX_PLAYLIST_TRACKS && (offset === 0 || offset < total)) {
+    const params = new URLSearchParams({
+      limit: "50",
+      offset: String(offset),
+      additional_types: "track",
+    });
+    const page = await fetchSpotifyApi(
+      `${SPOTIFY_API_BASE}/playlists/${encodeURIComponent(id)}/items?${params}`,
+      accessToken
+    );
+    const items = Array.isArray(page.items) ? page.items : [];
+    total = Number.isFinite(page.total) ? page.total : offset + items.length;
+    if (!items.length) break;
+
+    for (const entry of items) {
+      const track = entry.item || entry.track;
+      if (!track || track.type !== "track") continue;
+      const album = track.album || {};
+      const artistName =
+        (track.artists || []).map((artist) => artist.name).filter(Boolean).join(", ") ||
+        "Unknown Artist";
+      const trackCoverUrl = album.images?.[0]?.url || coverUrl || "/covers/neon-tide.png";
+      tracks.push({
+        title: track.name || "Untitled Track",
+        artistName,
+        albumTitle: album.name || `${playlistName} (Compilation)`,
+        duration: track.duration_ms ? Math.round(track.duration_ms / 1000) : 180,
+        audioUrl: track.preview_url || getRandomFallbackAudio(),
+        coverUrl: trackCoverUrl,
+        isExplicit: Boolean(track.explicit),
+        releaseDate: album.release_date?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+      });
+    }
+
+    offset += items.length;
+  }
+
+  return { tracks, total };
+}
+
+async function getSpotifyPlaylist(id, accessToken) {
   const data = await fetchEmbedData("playlist", id);
   const entity = data.props?.pageProps?.state?.data?.entity;
   if (!entity) {
@@ -82,6 +152,21 @@ async function getSpotifyPlaylist(id) {
     entity.coverArt?.sources?.[0]?.url ||
     entity.visualIdentity?.image?.[0]?.url ||
     "/covers/neon-tide.png";
+
+  if (accessToken) {
+    const { tracks, total } = await fetchAuthorizedPlaylistTracks(id, accessToken, name, coverUrl);
+    return {
+      type: "playlist",
+      id,
+      name,
+      description,
+      coverUrl,
+      trackCount: tracks.length,
+      sourceTrackCount: total,
+      tracksTruncated: total > MAX_PLAYLIST_TRACKS,
+      tracks,
+    };
+  }
 
   const rawTracks = entity.trackList || [];
   const tracks = rawTracks.map((t, i) => {
@@ -195,14 +280,14 @@ async function getSpotifyAlbum(id) {
   };
 }
 
-async function resolveSpotify(input) {
+async function resolveSpotify(input, options = {}) {
   const parsed = parseSpotifyUrl(input);
   if (!parsed) {
     throw new Error("Invalid Spotify URL or URI. Please provide a valid Spotify playlist, album, or track link.");
   }
 
   if (parsed.type === "playlist") {
-    return await getSpotifyPlaylist(parsed.id);
+    return await getSpotifyPlaylist(parsed.id, options.accessToken);
   } else if (parsed.type === "track") {
     return await getSpotifyTrack(parsed.id);
   } else if (parsed.type === "album") {

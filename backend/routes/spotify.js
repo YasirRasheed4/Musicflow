@@ -91,7 +91,9 @@ router.post("/preview", asyncHandler(async (req, res) => {
   }
 
   try {
-    const preview = await resolveSpotify(url);
+    const preview = await resolveSpotify(url, {
+      accessToken: req.get("X-Spotify-Access-Token"),
+    });
     res.json(preview);
   } catch (err) {
     res.status(400).json({ error: err.message || "Failed to preview Spotify item" });
@@ -106,7 +108,9 @@ router.post("/import-playlist", requireAuth, asyncHandler(async (req, res) => {
   }
 
   try {
-    const spotifyData = await resolveSpotify(url);
+    const spotifyData = await resolveSpotify(url, {
+      accessToken: req.get("X-Spotify-Access-Token"),
+    });
     if (spotifyData.type !== "playlist" && spotifyData.type !== "album") {
       return res.status(400).json({ error: "Provided link is not a playlist or album" });
     }
