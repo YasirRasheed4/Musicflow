@@ -129,7 +129,8 @@ account does not own or collaborate on cannot be fetched past that limit.
 - Favorites (heart any track)
 - Albums: rename, delete, and upload replacement cover art from album details or
   Tonight's Rotation cards
-- Playlists: create, view, add tracks from anywhere, remove tracks, public/private
+- Playlists: create, view, add/remove tracks, update cover art, public/private;
+  shared default playlists can be managed by any signed-in user
 - Spotify imports: public previews plus authorized, paginated playlist imports
   (up to 200 items)
 - Downloads: tracks flagged `is_downloadable` show a direct download link; others don't

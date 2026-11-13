@@ -5,6 +5,7 @@ const { requireAuth, optionalAuth } = require("../middleware/auth");
 const asyncHandler = require("../middleware/asyncHandler");
 
 const router = Router();
+const MAX_PLAYLIST_COVER_BYTES = 512 * 1024;
 
 const TRACK_SELECT = `
   SELECT tracks.*, artists.name AS artist_name, albums.title AS album_title
@@ -30,7 +31,7 @@ const PLAYLIST_QUERY = `
     (SELECT tracks.cover_url FROM playlist_tracks
      JOIN tracks ON tracks.id = playlist_tracks.track_id
      WHERE playlist_tracks.playlist_id = playlists.id
-     ORDER BY playlist_tracks.sort_order LIMIT 1) AS cover_url,
+     ORDER BY playlist_tracks.sort_order LIMIT 1) AS track_cover_url,
     (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_tracks.playlist_id = playlists.id) AS track_count
   FROM playlists
 `;
@@ -38,6 +39,19 @@ const PLAYLIST_QUERY = `
 router.get("/public", asyncHandler(async (_req, res) => {
   const rows = await db.prepare(`${PLAYLIST_QUERY} WHERE is_public = 1 ORDER BY id`).all();
   res.json({ playlists: rows.map(serialize.playlist) });
+}));
+
+router.get("/:id/cover", asyncHandler(async (req, res) => {
+  const row = await db.prepare("SELECT cover_url FROM playlists WHERE id = ?").get(req.params.id);
+  if (!row) return res.status(404).json({ error: "Playlist not found" });
+  const match = typeof row.cover_url === "string"
+    ? row.cover_url.match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/)
+    : null;
+  if (!match) return res.status(404).json({ error: "Uploaded playlist cover not found" });
+
+  res.set("Content-Type", `image/${match[1]}`);
+  res.set("Cache-Control", "no-cache");
+  res.send(Buffer.from(match[2], "base64"));
 }));
 
 router.get("/", requireAuth, asyncHandler(async (req, res) => {
@@ -81,20 +95,42 @@ async function loadPlaylist(req, res, next, allowDefault = false) {
   }
 }
 
-const loadOwnedPlaylist = (req, res, next) => loadPlaylist(req, res, next);
 const loadManageablePlaylist = (req, res, next) => loadPlaylist(req, res, next, true);
 
 router.patch("/:id", requireAuth, loadManageablePlaylist, asyncHandler(async (req, res) => {
   const { name, description, isPublic } = req.body || {};
+  const hasCover = Object.prototype.hasOwnProperty.call(req.body || {}, "coverUrl");
+  let coverUrl = req.playlist.cover_url;
+  if (hasCover) {
+    if (typeof req.body.coverUrl !== "string") {
+      return res.status(400).json({ error: "A valid playlist cover image is required" });
+    }
+    const match = req.body.coverUrl.match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/);
+    if (!match) {
+      return res.status(400).json({ error: "Playlist covers must be JPEG, PNG, or WebP images" });
+    }
+    if (match[2].length > Math.ceil(MAX_PLAYLIST_COVER_BYTES / 3) * 4) {
+      return res.status(413).json({ error: "Playlist cover images must be 512 KB or smaller after compression" });
+    }
+    const imageBytes = Buffer.from(match[2], "base64");
+    if (!imageBytes.length || imageBytes.toString("base64") !== match[2]) {
+      return res.status(400).json({ error: "The playlist cover image data is invalid" });
+    }
+    if (imageBytes.length > MAX_PLAYLIST_COVER_BYTES) {
+      return res.status(413).json({ error: "Playlist cover images must be 512 KB or smaller after compression" });
+    }
+    coverUrl = req.body.coverUrl;
+  }
   const next = {
     name: name !== undefined && name.trim() ? name.trim() : req.playlist.name,
     description: description !== undefined ? description : req.playlist.description,
     is_public: isPublic !== undefined ? (isPublic ? 1 : 0) : req.playlist.is_public,
   };
-  await db.prepare("UPDATE playlists SET name = ?, description = ?, is_public = ? WHERE id = ?").run(
+  await db.prepare("UPDATE playlists SET name = ?, description = ?, is_public = ?, cover_url = ? WHERE id = ?").run(
     next.name,
     next.description,
     next.is_public,
+    coverUrl,
     req.playlist.id
   );
   const row = await db.prepare("SELECT * FROM playlists WHERE id = ?").get(req.playlist.id);
@@ -107,7 +143,7 @@ router.delete("/:id", requireAuth, loadManageablePlaylist, asyncHandler(async (r
   res.json({ ok: true });
 }));
 
-router.post("/:id/tracks", requireAuth, loadOwnedPlaylist, asyncHandler(async (req, res) => {
+router.post("/:id/tracks", requireAuth, loadManageablePlaylist, asyncHandler(async (req, res) => {
   const { trackId } = req.body || {};
   const track = await db.prepare("SELECT id FROM tracks WHERE id = ?").get(trackId);
   if (!track) return res.status(404).json({ error: "Track not found" });
@@ -120,7 +156,7 @@ router.post("/:id/tracks", requireAuth, loadOwnedPlaylist, asyncHandler(async (r
   res.status(201).json({ tracks: await tracksForPlaylist(req.playlist.id) });
 }));
 
-router.delete("/:id/tracks/:trackId", requireAuth, loadOwnedPlaylist, asyncHandler(async (req, res) => {
+router.delete("/:id/tracks/:trackId", requireAuth, loadManageablePlaylist, asyncHandler(async (req, res) => {
   await db.prepare("DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?").run(
     req.playlist.id,
     req.params.trackId

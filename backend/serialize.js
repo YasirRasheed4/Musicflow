@@ -54,12 +54,15 @@ function artist(row) {
 
 function playlist(row) {
   if (!row) return null;
+  const coverUrl = row.cover_url || row.track_cover_url || null;
   return {
     id: row.id,
     userId: row.user_id,
     name: row.name,
     description: row.description,
-    coverUrl: row.cover_url || null,
+    coverUrl: typeof coverUrl === "string" && coverUrl.startsWith("data:image/")
+      ? `/api/playlists/${row.id}/cover`
+      : coverUrl,
     trackCount: row.track_count !== undefined ? Number(row.track_count) : undefined,
     isPublic: !!row.is_public,
     isDefault: !!row.is_default,

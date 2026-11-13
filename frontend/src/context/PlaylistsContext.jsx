@@ -38,13 +38,19 @@ export function PlaylistsProvider({ children }) {
     return res.playlist;
   }, []);
 
+  const updatePlaylist = useCallback((updatedPlaylist) => {
+    setPlaylists((prev) => prev.map((playlist) =>
+      playlist.id === updatedPlaylist.id ? { ...playlist, ...updatedPlaylist } : playlist
+    ));
+  }, []);
+
   const deletePlaylist = useCallback(async (id) => {
     await api.delete(`/playlists/${id}`);
     setPlaylists((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
   return (
-    <PlaylistsContext.Provider value={{ playlists, refresh, createPlaylist, renamePlaylist, deletePlaylist }}>
+    <PlaylistsContext.Provider value={{ playlists, refresh, createPlaylist, renamePlaylist, updatePlaylist, deletePlaylist }}>
       {children}
     </PlaylistsContext.Provider>
   );

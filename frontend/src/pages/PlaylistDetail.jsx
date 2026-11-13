@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import JSZip from "jszip";
-import { Pencil, Play, Plus, Trash2, Download } from "lucide-react";
+import { Pencil, Play, Plus, Trash2, Download, UploadCloud } from "lucide-react";
 import TrackRow from "../components/TrackRow";
 import AddToPlaylistModal from "../components/AddToPlaylistModal";
 import ImportSpotifyModal from "../components/ImportSpotifyModal";
@@ -10,12 +10,13 @@ import { api } from "../api";
 import { usePlayer } from "../context/PlayerContext";
 import { useAuth } from "../context/AuthContext";
 import { usePlaylists } from "../context/PlaylistsContext";
+import compressCoverImage from "../compressCoverImage";
 
 export default function PlaylistDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { renamePlaylist, deletePlaylist } = usePlaylists();
+  const { renamePlaylist, updatePlaylist, deletePlaylist } = usePlaylists();
   const [playlist, setPlaylist] = useState(null);
   const [tracks, setTracks] = useState([]);
   const [error, setError] = useState("");
@@ -23,6 +24,8 @@ export default function PlaylistDetail() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const coverInputRef = useRef(null);
   const { playTrack } = usePlayer();
 
   const load = useCallback(() => {
@@ -43,6 +46,24 @@ export default function PlaylistDetail() {
 
   const isOwner = user && playlist && user.id === playlist.userId;
   const canManagePlaylist = isOwner || (user && playlist?.isDefault);
+
+  const handleCoverUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError("");
+    setUploadingCover(true);
+    try {
+      const coverUrl = await compressCoverImage(file);
+      const res = await api.patch(`/playlists/${playlist.id}`, { coverUrl });
+      setPlaylist(res.playlist);
+      updatePlaylist(res.playlist);
+    } catch (err) {
+      setError(err.message || "Failed to update playlist cover");
+    } finally {
+      setUploadingCover(false);
+      event.target.value = "";
+    }
+  };
 
   const handleRemove = async (track) => {
     const res = await api.delete(`/playlists/${id}/tracks/${track.id}`);
@@ -170,13 +191,32 @@ export default function PlaylistDetail() {
                 <Download size={16} /> {downloading ? "Preparing..." : "Download Playlist"}
               </button>
             )}
-            {isOwner && (
+            {canManagePlaylist && (
               <button
                 onClick={() => setShowAddModal(true)}
                 className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink hover:bg-line transition"
               >
                 <Plus size={16} /> Add Songs
               </button>
+            )}
+            {canManagePlaylist && (
+              <>
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleCoverUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => coverInputRef.current?.click()}
+                  disabled={uploadingCover}
+                  className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink hover:bg-line transition disabled:opacity-50"
+                >
+                  <UploadCloud size={16} /> {uploadingCover ? "Uploading cover..." : "Change cover photo"}
+                </button>
+              </>
             )}
             {canManagePlaylist && (
               <>
@@ -211,7 +251,7 @@ export default function PlaylistDetail() {
               index={i + 1}
               queue={tracks}
               onAddToPlaylist={setAddTrack}
-              onRemove={isOwner ? handleRemove : undefined}
+              onRemove={canManagePlaylist ? handleRemove : undefined}
               onDelete={user ? handleDeleteTrack : undefined}
             />
           ))

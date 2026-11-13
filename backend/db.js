@@ -54,6 +54,7 @@ if (process.env.DB_CLIENT === "sqlite") {
       user_id INTEGER NOT NULL REFERENCES users(id),
       name TEXT NOT NULL,
       description TEXT,
+      cover_url TEXT,
       is_public INTEGER NOT NULL DEFAULT 0,
       is_default INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -84,6 +85,9 @@ if (process.env.DB_CLIENT === "sqlite") {
   `);
 
   const playlistColumns = connection.prepare("PRAGMA table_info(playlists)").all();
+  if (!playlistColumns.some((column) => column.name === "cover_url")) {
+    connection.exec("ALTER TABLE playlists ADD COLUMN cover_url TEXT");
+  }
   if (!playlistColumns.some((column) => column.name === "is_default")) {
     connection.exec("ALTER TABLE playlists ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0");
   }
@@ -219,10 +223,12 @@ if (process.env.DB_CLIENT === "sqlite") {
           user_id INTEGER NOT NULL REFERENCES users(id),
           name TEXT NOT NULL,
           description TEXT,
+          cover_url TEXT,
           is_public INTEGER NOT NULL DEFAULT 0,
           is_default INTEGER NOT NULL DEFAULT 0,
           created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
+        ALTER TABLE playlists ADD COLUMN IF NOT EXISTS cover_url TEXT;
         ALTER TABLE playlists ADD COLUMN IF NOT EXISTS is_default INTEGER NOT NULL DEFAULT 0;
         UPDATE playlists
         SET is_default = 1

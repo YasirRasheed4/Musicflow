@@ -134,10 +134,16 @@ router.get("/youtube/search", asyncHandler(async (req, res) => {
 }));
 
 // Upload local audio file (MP3/WAV)
-router.post("/tracks/upload", asyncHandler(async (req, res) => {
+router.post("/tracks/upload", requireAuth, asyncHandler(async (req, res) => {
   const { title, artistName, albumTitle, fileName, base64Data, duration, playlistId } = req.body || {};
   if (!title || !title.trim()) return res.status(400).json({ error: "Song title is required" });
   if (!base64Data) return res.status(400).json({ error: "Audio file data is required" });
+  if (playlistId) {
+    const playlist = await db
+      .prepare("SELECT id FROM playlists WHERE id = ? AND (user_id = ? OR is_default = 1)")
+      .get(playlistId, req.user.id);
+    if (!playlist) return res.status(403).json({ error: "You don't have permission to add songs to this playlist" });
+  }
 
   try {
     const cleanFileName = `${Date.now()}-${(fileName || "track.mp3").replace(/[^a-zA-Z0-9.-]/g, "_")}`;

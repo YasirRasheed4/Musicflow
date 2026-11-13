@@ -183,7 +183,9 @@ router.post("/import-track", requireAuth, asyncHandler(async (req, res) => {
       });
 
       if (playlistId) {
-        const playlist = await connection.prepare("SELECT * FROM playlists WHERE id = ? AND user_id = ?").get(playlistId, req.user.id);
+        const playlist = await connection
+          .prepare("SELECT * FROM playlists WHERE id = ? AND (user_id = ? OR is_default = 1)")
+          .get(playlistId, req.user.id);
         if (playlist) {
           const { maxOrder } = await connection
             .prepare('SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM playlist_tracks WHERE playlist_id = ?')
@@ -228,7 +230,9 @@ router.post("/custom-track", requireAuth, asyncHandler(async (req, res) => {
       });
 
       if (playlistId) {
-        const playlist = await connection.prepare("SELECT * FROM playlists WHERE id = ? AND user_id = ?").get(playlistId, req.user.id);
+        const playlist = await connection
+          .prepare("SELECT * FROM playlists WHERE id = ? AND (user_id = ? OR is_default = 1)")
+          .get(playlistId, req.user.id);
         if (playlist) {
           const { maxOrder } = await connection
             .prepare('SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM playlist_tracks WHERE playlist_id = ?')

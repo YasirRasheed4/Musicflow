@@ -228,7 +228,7 @@ export default function Home() {
               <Card
                 key={p.id}
                 to={`/playlists/${p.id}`}
-                image={p.tracks[0]?.coverUrl}
+                image={p.coverUrl || p.tracks[0]?.coverUrl}
                 title={p.name}
                 subtitle={p.description}
                 onPlay={() => p.tracks.length && playTrack(p.tracks[0], p.tracks)}
