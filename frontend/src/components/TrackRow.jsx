@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import Waveform from "./Waveform";
 import { formatTime } from "../format";
 
-export default function TrackRow({ track, index, queue, onAddToPlaylist, onRemove }) {
+export default function TrackRow({ track, index, queue, onAddToPlaylist, onRemove, onDelete }) {
   const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayer();
   const { isFavorited, toggleFavorite } = useFavorites();
   const { user } = useAuth();
@@ -94,6 +94,16 @@ export default function TrackRow({ track, index, queue, onAddToPlaylist, onRemov
             className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-rose-500/10 hover:text-rose-400 transition"
             title={`Remove "${track.title}" from this playlist`}
             aria-label={`Remove ${track.title} from this playlist`}
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
+        {onDelete && (
+          <button
+            onClick={() => onDelete(track)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-rose-500/10 hover:text-rose-400 transition"
+            title={`Delete "${track.title}"`}
+            aria-label={`Delete ${track.title}`}
           >
             <Trash2 size={16} />
           </button>

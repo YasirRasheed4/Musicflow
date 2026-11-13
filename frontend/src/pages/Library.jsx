@@ -19,6 +19,7 @@ export default function Library() {
   const [newName, setNewName] = useState("");
   const [addTrack, setAddTrack] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (user && tab === "favorites") {
@@ -35,6 +36,16 @@ export default function Library() {
   const handleRemoveFavorite = async (t) => {
     await toggleFavorite(t);
     setFavorites((prev) => prev.filter((item) => item.id !== t.id));
+  };
+
+  const handleDeleteTrack = async (track) => {
+    if (!window.confirm(`Delete "${track.title}"? This removes it from all playlists and favorites.`)) return;
+    try {
+      await api.delete(`/tracks/${track.id}`);
+      setFavorites((previous) => previous.filter((item) => item.id !== track.id));
+    } catch (err) {
+      setError(err.message || "Failed to delete song");
+    }
   };
 
   if (!user) {
@@ -58,6 +69,7 @@ export default function Library() {
 
   return (
     <div className="flex flex-col gap-6 pb-10">
+      {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-3xl">Your library</h1>
@@ -144,6 +156,7 @@ export default function Library() {
                 queue={favorites}
                 onAddToPlaylist={setAddTrack}
                 onRemove={() => handleRemoveFavorite(t)}
+                onDelete={handleDeleteTrack}
               />
             ))
           )}

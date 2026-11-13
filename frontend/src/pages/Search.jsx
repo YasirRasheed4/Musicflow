@@ -5,12 +5,42 @@ import TrackRow from "../components/TrackRow";
 import Card from "../components/Card";
 import AddToPlaylistModal from "../components/AddToPlaylistModal";
 import { api } from "../api";
+import { useAuth } from "../context/AuthContext";
 
 export default function Search() {
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState(params.get("q") || "");
   const [results, setResults] = useState({ tracks: [], albums: [], artists: [] });
   const [addTrack, setAddTrack] = useState(null);
+  const [error, setError] = useState("");
+  const { user } = useAuth();
+
+  const handleDeleteTrack = async (track) => {
+    if (!window.confirm(`Delete "${track.title}"? This removes it from all playlists and favorites.`)) return;
+    try {
+      await api.delete(`/tracks/${track.id}`);
+      setResults((previous) => ({
+        ...previous,
+        tracks: previous.tracks.filter((item) => item.id !== track.id),
+      }));
+    } catch (err) {
+      setError(err.message || "Failed to delete song");
+    }
+  };
+
+  const handleDeleteAlbum = async (album) => {
+    if (!window.confirm(`Delete "${album.title}" and all of its songs?`)) return;
+    try {
+      await api.delete(`/albums/${album.id}`);
+      setResults((previous) => ({
+        ...previous,
+        albums: previous.albums.filter((item) => item.id !== album.id),
+        tracks: previous.tracks.filter((track) => track.albumId !== album.id),
+      }));
+    } catch (err) {
+      setError(err.message || "Failed to delete album");
+    }
+  };
 
   useEffect(() => {
     const q = query.trim();
@@ -40,6 +70,7 @@ export default function Search() {
           className="w-full rounded-full bg-surface2 py-3 pl-10 pr-4 text-ink placeholder:text-muted focus:outline-none"
         />
       </div>
+      {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
 
       {query.trim() && !hasResults && <p className="text-muted">Nothing matching "{query}" — try a different search.</p>}
 
@@ -48,7 +79,14 @@ export default function Search() {
           <h2 className="mb-2 font-display text-xl">Songs</h2>
           <div className="flex flex-col">
             {results.tracks.map((t, i) => (
-              <TrackRow key={t.id} track={t} index={i + 1} queue={results.tracks} onAddToPlaylist={setAddTrack} />
+              <TrackRow
+                key={t.id}
+                track={t}
+                index={i + 1}
+                queue={results.tracks}
+                onAddToPlaylist={setAddTrack}
+                onDelete={user ? handleDeleteTrack : undefined}
+              />
             ))}
           </div>
         </section>
@@ -59,7 +97,14 @@ export default function Search() {
           <h2 className="mb-3 font-display text-xl">Albums</h2>
           <div className="flex gap-4 overflow-x-auto pb-2">
             {results.albums.map((a) => (
-              <Card key={a.id} to={`/albums/${a.id}`} image={a.coverUrl} title={a.title} subtitle={a.artistName} />
+              <Card
+                key={a.id}
+                to={`/albums/${a.id}`}
+                image={a.coverUrl}
+                title={a.title}
+                subtitle={a.artistName}
+                onDelete={user ? () => handleDeleteAlbum(a) : undefined}
+              />
             ))}
           </div>
         </section>

@@ -1,17 +1,21 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { Play } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Play, Trash2 } from "lucide-react";
 import TrackRow from "../components/TrackRow";
 import AddToPlaylistModal from "../components/AddToPlaylistModal";
 import { api } from "../api";
 import { usePlayer } from "../context/PlayerContext";
+import { useAuth } from "../context/AuthContext";
 
 export default function AlbumDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [album, setAlbum] = useState(null);
   const [tracks, setTracks] = useState([]);
   const [addTrack, setAddTrack] = useState(null);
+  const [error, setError] = useState("");
   const { playTrack } = usePlayer();
+  const { user } = useAuth();
 
   useEffect(() => {
     setAlbum(null);
@@ -21,10 +25,31 @@ export default function AlbumDetail() {
     });
   }, [id]);
 
+  const handleDeleteAlbum = async () => {
+    if (!window.confirm(`Delete "${album.title}" and all of its songs?`)) return;
+    try {
+      await api.delete(`/albums/${album.id}`);
+      navigate("/");
+    } catch (err) {
+      setError(err.message || "Failed to delete album");
+    }
+  };
+
+  const handleDeleteTrack = async (track) => {
+    if (!window.confirm(`Delete "${track.title}"? This removes it from all playlists and favorites.`)) return;
+    try {
+      await api.delete(`/tracks/${track.id}`);
+      setTracks((previous) => previous.filter((item) => item.id !== track.id));
+    } catch (err) {
+      setError(err.message || "Failed to delete song");
+    }
+  };
+
   if (!album) return null;
 
   return (
     <div className="flex flex-col gap-6 pb-10">
+      {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
       <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-end">
         <img src={album.coverUrl} alt="" className="h-48 w-48 rounded-xl object-cover shadow-2xl shadow-black/40" />
         <div className="text-center sm:text-left">
@@ -39,12 +64,27 @@ export default function AlbumDetail() {
           >
             <Play size={16} fill="currentColor" /> Play
           </button>
+          {user && (
+            <button
+              onClick={handleDeleteAlbum}
+              className="mt-3 flex items-center gap-2 rounded-full bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-400 hover:bg-rose-500/20"
+            >
+              <Trash2 size={16} /> Delete album
+            </button>
+          )}
         </div>
       </div>
 
       <div className="flex flex-col">
         {tracks.map((t, i) => (
-          <TrackRow key={t.id} track={t} index={i + 1} queue={tracks} onAddToPlaylist={setAddTrack} />
+          <TrackRow
+            key={t.id}
+            track={t}
+            index={i + 1}
+            queue={tracks}
+            onAddToPlaylist={setAddTrack}
+            onDelete={user ? handleDeleteTrack : undefined}
+          />
         ))}
       </div>
 

@@ -4,6 +4,7 @@ const { Router } = require("express");
 const db = require("../db");
 const serialize = require("../serialize");
 const asyncHandler = require("../middleware/asyncHandler");
+const { requireAuth } = require("../middleware/auth");
 
 const router = Router();
 
@@ -39,7 +40,7 @@ router.get("/tracks", asyncHandler(async (req, res) => {
   let sql = TRACK_SELECT;
   if (clauses.length) sql += ` WHERE ${clauses.join(" AND ")}`;
   sql += " ORDER BY tracks.id";
-  if (limit) sql += ` LIMIT ${Math.max(1, Math.min(100, Number(limit) || 20))}`;
+  if (limit) sql += ` LIMIT ${Math.max(1, Math.min(200, Number(limit) || 20))}`;
 
   const rows = await db.prepare(sql).all(...params);
   res.json({ tracks: rows.map(serialize.track) });
@@ -198,15 +199,17 @@ router.post("/tracks/upload", asyncHandler(async (req, res) => {
 }));
 
 // Delete a track
-router.delete("/tracks/:id", asyncHandler(async (req, res) => {
+router.delete("/tracks/:id", requireAuth, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const track = await db.prepare("SELECT * FROM tracks WHERE id = ?").get(id);
   if (!track) return res.status(404).json({ error: "Track not found" });
 
-  await db.prepare("DELETE FROM favorites WHERE track_id = ?").run(id);
-  await db.prepare("DELETE FROM playlist_tracks WHERE track_id = ?").run(id);
-  await db.prepare("DELETE FROM playback_history WHERE track_id = ?").run(id);
-  await db.prepare("DELETE FROM tracks WHERE id = ?").run(id);
+  await db.transaction(async (connection) => {
+    await connection.prepare("DELETE FROM favorites WHERE track_id = ?").run(id);
+    await connection.prepare("DELETE FROM playlist_tracks WHERE track_id = ?").run(id);
+    await connection.prepare("DELETE FROM playback_history WHERE track_id = ?").run(id);
+    await connection.prepare("DELETE FROM tracks WHERE id = ?").run(id);
+  })();
 
   res.json({ ok: true, message: `Deleted track ${track.title}` });
 }));
