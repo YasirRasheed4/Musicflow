@@ -209,7 +209,7 @@ router.delete("/tracks/:id", requireAuth, asyncHandler(async (req, res) => {
     await connection.prepare("DELETE FROM playlist_tracks WHERE track_id = ?").run(id);
     await connection.prepare("DELETE FROM playback_history WHERE track_id = ?").run(id);
     await connection.prepare("DELETE FROM tracks WHERE id = ?").run(id);
-  })();
+  });
 
   res.json({ ok: true, message: `Deleted track ${track.title}` });
 }));

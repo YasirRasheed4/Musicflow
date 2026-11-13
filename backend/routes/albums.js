@@ -45,7 +45,7 @@ router.delete("/albums/:id", requireAuth, asyncHandler(async (req, res) => {
     await connection.prepare(`DELETE FROM playback_history WHERE track_id IN ${trackIds}`).run(req.params.id);
     await connection.prepare("DELETE FROM tracks WHERE album_id = ?").run(req.params.id);
     await connection.prepare("DELETE FROM albums WHERE id = ?").run(req.params.id);
-  })();
+  });
 
   res.json({ ok: true, message: `Deleted album ${album.title}` });
 }));

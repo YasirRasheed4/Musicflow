@@ -105,18 +105,16 @@ if (process.env.DB_CLIENT === "sqlite") {
     exec(sql) {
       return connection.exec(sql);
     },
-    transaction(callback) {
-      return async (...args) => {
-        connection.exec("BEGIN");
-        try {
-          const result = await callback({ prepare }, ...args);
-          connection.exec("COMMIT");
-          return result;
-        } catch (error) {
-          connection.exec("ROLLBACK");
-          throw error;
-        }
-      };
+    async transaction(callback) {
+      connection.exec("BEGIN");
+      try {
+        const result = await callback({ prepare });
+        connection.exec("COMMIT");
+        return result;
+      } catch (error) {
+        connection.exec("ROLLBACK");
+        throw error;
+      }
     },
   };
 } else {
