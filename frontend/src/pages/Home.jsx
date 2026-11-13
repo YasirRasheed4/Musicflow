@@ -1,10 +1,11 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Sparkles } from "lucide-react";
 import Card from "../components/Card";
 import TrackRow from "../components/TrackRow";
 import AddToPlaylistModal from "../components/AddToPlaylistModal";
 import ImportSpotifyModal from "../components/ImportSpotifyModal";
 import { api } from "../api";
+import compressCoverImage from "../compressCoverImage";
 import { usePlayer } from "../context/PlayerContext";
 import { useAuth } from "../context/AuthContext";
 import { usePlaylists } from "../context/PlaylistsContext";
@@ -16,8 +17,11 @@ export default function Home() {
   const [rotationAlbumId, setRotationAlbumId] = useState("");
   const [tracks, setTracks] = useState([]);
   const [addTrack, setAddTrack] = useState(null);
+  const [coverAlbumId, setCoverAlbumId] = useState(null);
+  const [uploadingCoverId, setUploadingCoverId] = useState(null);
   const [showSpotifyImport, setShowSpotifyImport] = useState(false);
   const [error, setError] = useState("");
+  const coverInputRef = useRef(null);
   const { playTrack } = usePlayer();
   const { user } = useAuth();
   const { renamePlaylist, deletePlaylist } = usePlaylists();
@@ -112,6 +116,43 @@ export default function Home() {
     }
   };
 
+  const handleCoverUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file || coverAlbumId === null) return;
+    setError("");
+    setUploadingCoverId(coverAlbumId);
+    try {
+      const coverUrl = await compressCoverImage(file);
+      const { album: updatedAlbum } = await api.patch(`/albums/${coverAlbumId}`, { coverUrl });
+      const updateTracks = (items) => items.map((track) =>
+        track.albumId === updatedAlbum.id ? { ...track, coverUrl: updatedAlbum.coverUrl } : track
+      );
+      setAlbums((previous) => previous.map((album) =>
+        album.id === updatedAlbum.id ? updatedAlbum : album
+      ));
+      setRotationAlbums((previous) => previous.map((album) =>
+        album.id === updatedAlbum.id ? updatedAlbum : album
+      ));
+      setTracks(updateTracks);
+      setPlaylists((previous) => previous.map((playlist) => ({
+        ...playlist,
+        tracks: updateTracks(playlist.tracks),
+      })));
+    } catch (err) {
+      setError(err.message || "Failed to update album cover");
+    } finally {
+      setUploadingCoverId(null);
+      setCoverAlbumId(null);
+      event.target.value = "";
+    }
+  };
+
+  const chooseAlbumCover = (album) => {
+    if (uploadingCoverId) return;
+    setCoverAlbumId(album.id);
+    coverInputRef.current?.click();
+  };
+
   const handleDeleteTrack = async (track) => {
     if (!window.confirm(`Delete "${track.title}"? This removes it from all playlists and favorites.`)) return;
     try {
@@ -128,7 +169,17 @@ export default function Home() {
 
   return (
     <div className="flex flex-col gap-10 pb-10">
+      {user && (
+        <input
+          ref={coverInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleCoverUpload}
+          className="hidden"
+        />
+      )}
       {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
+      {uploadingCoverId && <p role="status" className="text-sm text-muted">Uploading album cover...</p>}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-3xl">Good listening.</h1>
@@ -198,6 +249,7 @@ export default function Home() {
                 }}
                 onRename={user ? () => handleRenameAlbum(album) : undefined}
                 onRemove={user ? () => handleRemoveAlbumFromRotation(album) : undefined}
+                onChangeCover={user && !uploadingCoverId ? () => chooseAlbumCover(album) : undefined}
               />
             ))}
           </div>
