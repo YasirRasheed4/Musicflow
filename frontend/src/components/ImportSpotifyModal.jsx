@@ -69,7 +69,12 @@ function readFileAsBase64(file) {
   });
 }
 
-export default function ImportSpotifyModal({ onClose, defaultPlaylistId, initialTab = "spotify" }) {
+export default function ImportSpotifyModal({
+  onClose,
+  onAlbumsChanged,
+  defaultPlaylistId,
+  initialTab = "spotify",
+}) {
   const navigate = useNavigate();
   const { playlists, refresh } = usePlaylists();
   const fileInputRef = useRef(null);
@@ -203,6 +208,7 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId, initial
           isPublic,
         }, options);
         await refresh();
+        await onAlbumsChanged?.();
         setSuccessMsg(`Successfully imported "${res.playlist.name}" with full-length playback!`);
         setTimeout(() => {
           onClose();
@@ -214,6 +220,7 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId, initial
           playlistId: targetPlaylistId || undefined,
         });
         await refresh();
+        await onAlbumsChanged?.();
         setSuccessMsg(`Added "${res.track.title}" with full song playback!`);
         setTimeout(() => {
           onClose();
@@ -300,6 +307,7 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId, initial
         }
       }
 
+      await onAlbumsChanged?.();
       setSelectedFiles(failedFiles.map(({ file }) => file));
       try {
         await refresh();
@@ -357,6 +365,7 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId, initial
         playlistId: targetPlaylistId || undefined,
       });
       await refresh();
+      await onAlbumsChanged?.();
       setSuccessMsg(`Added "${res.track.title}"!`);
       setTimeout(() => {
         onClose();

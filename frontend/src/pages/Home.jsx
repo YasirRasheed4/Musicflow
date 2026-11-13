@@ -45,6 +45,15 @@ export default function Home() {
     api.get("/tracks?limit=8").then((res) => setTracks(res.tracks));
   }, []);
 
+  const refreshAlbums = async () => {
+    try {
+      const res = await api.get("/albums");
+      setAlbums(res.albums);
+    } catch (err) {
+      setError(err.message || "Failed to refresh albums");
+    }
+  };
+
   useEffect(() => {
     if (!user) {
       setTopTracks([]);
@@ -357,7 +366,12 @@ export default function Home() {
       )}
 
       {addTrack && <AddToPlaylistModal track={addTrack} onClose={() => setAddTrack(null)} />}
-      {showSpotifyImport && <ImportSpotifyModal onClose={() => setShowSpotifyImport(false)} />}
+      {showSpotifyImport && (
+        <ImportSpotifyModal
+          onClose={() => setShowSpotifyImport(false)}
+          onAlbumsChanged={refreshAlbums}
+        />
+      )}
     </div>
   );
 }
