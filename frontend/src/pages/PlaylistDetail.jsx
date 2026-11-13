@@ -48,6 +48,16 @@ export default function PlaylistDetail() {
     setTracks(res.tracks);
   };
 
+  const handleDeleteTrack = async (track) => {
+    if (!window.confirm(`Delete "${track.title}" from the catalog and all playlists?`)) return;
+    try {
+      await api.delete(`/tracks/${track.id}`);
+      setTracks((previous) => previous.filter((item) => item.id !== track.id));
+    } catch (err) {
+      setError(err.message || "Failed to delete song");
+    }
+  };
+
   const handleDelete = async () => {
     if (!window.confirm(`Are you sure you want to delete the playlist "${playlist.name}"?`)) return;
     setDeleting(true);
@@ -105,13 +115,13 @@ export default function PlaylistDetail() {
     }
   };
 
-  if (error) return <p className="text-muted">{error}</p>;
-  if (!playlist) return null;
+  if (!playlist) return error ? <p className="text-muted">{error}</p> : null;
 
   const coverUrl = playlist.coverUrl || tracks[0]?.coverUrl;
 
   return (
     <div className="flex flex-col gap-6 pb-10">
+      {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
       <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-end">
         {coverUrl ? (
           <img
@@ -182,6 +192,7 @@ export default function PlaylistDetail() {
               queue={tracks}
               onAddToPlaylist={setAddTrack}
               onRemove={isOwner ? handleRemove : undefined}
+              onDelete={user ? handleDeleteTrack : undefined}
             />
           ))
         )}

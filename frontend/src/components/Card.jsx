@@ -33,7 +33,7 @@ export default function Card({ to, image, title, subtitle, onPlay, onDelete }) {
               e.stopPropagation();
               onDelete();
             }}
-            className="absolute top-2 right-2 flex h-8 w-8 -translate-y-1 items-center justify-center rounded-full bg-black/70 text-muted opacity-0 backdrop-blur-sm transition duration-200 hover:bg-rose-500 hover:text-white group-hover:translate-y-0 group-hover:opacity-100"
+            className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-muted opacity-100 backdrop-blur-sm transition duration-200 hover:bg-rose-500 hover:text-white sm:-translate-y-1 sm:opacity-0 sm:group-hover:translate-y-0 sm:group-hover:opacity-100"
             title={`Delete ${title}`}
             aria-label={`Delete ${title}`}
           >
