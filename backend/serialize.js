@@ -59,6 +59,7 @@ function playlist(row) {
     coverUrl: row.cover_url || null,
     trackCount: row.track_count !== undefined ? Number(row.track_count) : undefined,
     isPublic: !!row.is_public,
+    isDefault: !!row.is_default,
     createdAt: row.created_at,
   };
 }

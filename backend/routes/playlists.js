@@ -67,11 +67,11 @@ router.post("/", requireAuth, asyncHandler(async (req, res) => {
   res.status(201).json({ playlist: serialize.playlist(row), tracks: [] });
 }));
 
-async function loadOwnedPlaylist(req, res, next) {
+async function loadPlaylist(req, res, next, allowDefault = false) {
   try {
     const row = await db.prepare("SELECT * FROM playlists WHERE id = ?").get(req.params.id);
     if (!row) return res.status(404).json({ error: "Playlist not found" });
-    if (row.user_id !== req.user.id) {
+    if (row.user_id !== req.user.id && !(allowDefault && row.is_default)) {
       return res.status(403).json({ error: "You don't own this playlist" });
     }
     req.playlist = row;
@@ -81,7 +81,10 @@ async function loadOwnedPlaylist(req, res, next) {
   }
 }
 
-router.patch("/:id", requireAuth, loadOwnedPlaylist, asyncHandler(async (req, res) => {
+const loadOwnedPlaylist = (req, res, next) => loadPlaylist(req, res, next);
+const loadManageablePlaylist = (req, res, next) => loadPlaylist(req, res, next, true);
+
+router.patch("/:id", requireAuth, loadManageablePlaylist, asyncHandler(async (req, res) => {
   const { name, description, isPublic } = req.body || {};
   const next = {
     name: name !== undefined && name.trim() ? name.trim() : req.playlist.name,
@@ -98,7 +101,7 @@ router.patch("/:id", requireAuth, loadOwnedPlaylist, asyncHandler(async (req, re
   res.json({ playlist: serialize.playlist(row), tracks: await tracksForPlaylist(row.id) });
 }));
 
-router.delete("/:id", requireAuth, loadOwnedPlaylist, asyncHandler(async (req, res) => {
+router.delete("/:id", requireAuth, loadManageablePlaylist, asyncHandler(async (req, res) => {
   await db.prepare("DELETE FROM playlist_tracks WHERE playlist_id = ?").run(req.playlist.id);
   await db.prepare("DELETE FROM playlists WHERE id = ?").run(req.playlist.id);
   res.json({ ok: true });

@@ -55,6 +55,7 @@ if (process.env.DB_CLIENT === "sqlite") {
       name TEXT NOT NULL,
       description TEXT,
       is_public INTEGER NOT NULL DEFAULT 0,
+      is_default INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS rotation_albums (
@@ -81,6 +82,20 @@ if (process.env.DB_CLIENT === "sqlite") {
       duration_listened INTEGER NOT NULL DEFAULT 0
     );
   `);
+
+  const playlistColumns = connection.prepare("PRAGMA table_info(playlists)").all();
+  if (!playlistColumns.some((column) => column.name === "is_default")) {
+    connection.exec("ALTER TABLE playlists ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0");
+  }
+  connection.prepare(`
+    UPDATE playlists
+    SET is_default = 1
+    WHERE user_id = (SELECT id FROM users WHERE email = 'demo@musicflow.app')
+      AND (
+        (name = 'Late Night Drive' AND description = 'For when the city''s asleep and you''re not.')
+        OR (name = 'Quiet Mornings' AND description = 'Slow coffee, soft light.')
+      )
+  `).run();
 
   function prepare(sql) {
     const statement = connection.prepare(
@@ -205,8 +220,17 @@ if (process.env.DB_CLIENT === "sqlite") {
           name TEXT NOT NULL,
           description TEXT,
           is_public INTEGER NOT NULL DEFAULT 0,
+          is_default INTEGER NOT NULL DEFAULT 0,
           created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
+        ALTER TABLE playlists ADD COLUMN IF NOT EXISTS is_default INTEGER NOT NULL DEFAULT 0;
+        UPDATE playlists
+        SET is_default = 1
+        WHERE user_id = (SELECT id FROM users WHERE email = 'demo@musicflow.app')
+          AND (
+            (name = 'Late Night Drive' AND description = 'For when the city''s asleep and you''re not.')
+            OR (name = 'Quiet Mornings' AND description = 'Slow coffee, soft light.')
+          );
         CREATE TABLE IF NOT EXISTS rotation_albums (
           album_id INTEGER PRIMARY KEY REFERENCES albums(id),
           sort_order INTEGER NOT NULL DEFAULT 0

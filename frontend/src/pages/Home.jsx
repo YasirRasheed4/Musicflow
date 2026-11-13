@@ -167,8 +167,8 @@ export default function Home() {
                 title={p.name}
                 subtitle={p.description}
                 onPlay={() => p.tracks.length && playTrack(p.tracks[0], p.tracks)}
-                onRename={user && user.id === p.userId ? () => handleRenamePlaylist(p) : undefined}
-                onDelete={user && user.id === p.userId ? () => handleDeletePlaylist(p) : undefined}
+                onRename={user && (user.id === p.userId || p.isDefault) ? () => handleRenamePlaylist(p) : undefined}
+                onDelete={user && (user.id === p.userId || p.isDefault) ? () => handleDeletePlaylist(p) : undefined}
               />
             ))}
             {rotationAlbums.map((album) => (

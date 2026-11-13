@@ -42,6 +42,7 @@ export default function PlaylistDetail() {
   }, [load]);
 
   const isOwner = user && playlist && user.id === playlist.userId;
+  const canManagePlaylist = isOwner || (user && playlist?.isDefault);
 
   const handleRemove = async (track) => {
     const res = await api.delete(`/playlists/${id}/tracks/${track.id}`);
@@ -170,18 +171,20 @@ export default function PlaylistDetail() {
               </button>
             )}
             {isOwner && (
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink hover:bg-line transition"
+              >
+                <Plus size={16} /> Add Songs
+              </button>
+            )}
+            {canManagePlaylist && (
               <>
                 <button
                   onClick={handleRename}
                   className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink hover:bg-line transition"
                 >
                   <Pencil size={16} /> Rename Playlist
-                </button>
-                <button
-                  onClick={() => setShowAddModal(true)}
-                  className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink hover:bg-line transition"
-                >
-                  <Plus size={16} /> Add Songs
                 </button>
                 <button
                   onClick={handleDelete}

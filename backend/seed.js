@@ -91,7 +91,7 @@ async function seedData() {
     const userId = userResult.lastInsertRowid;
 
     const addPlaylist = connection.prepare(
-      "INSERT INTO playlists (user_id, name, description, is_public) VALUES (?, ?, ?, 1)"
+      "INSERT INTO playlists (user_id, name, description, is_public, is_default) VALUES (?, ?, ?, 1, 1)"
     );
     const addPlaylistTrack = connection.prepare(
       "INSERT INTO playlist_tracks (playlist_id, track_id, sort_order) VALUES (?, ?, ?)"
