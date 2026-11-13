@@ -29,7 +29,8 @@ function createTrackStore() {
               title: values[0],
               artist_id: values[1],
               album_id: values[2],
-              genre_tags: '["spotify"]',
+              genre_tags: values[6],
+              is_downloadable: values[8],
             };
             tracks.push(track);
             return { lastInsertRowid: track.id };
@@ -60,6 +61,7 @@ test("keeps a matching song as a separate track for a different album", async ()
 
   assert.notEqual(first.id, second.id);
   assert.deepEqual(store.tracks.map((track) => track.album_id), [12, 13]);
+  assert.equal(first.is_downloadable, 0);
 });
 
 test("preserves repeated occurrences in an album and reuses them on reimport", async () => {
@@ -89,4 +91,14 @@ test("does not reuse a device-uploaded track with matching metadata", async () =
   const imported = await findOrCreateSpotifyTrack(store, baseTrack);
 
   assert.notEqual(imported.id, 1);
+  assert.equal(imported.is_downloadable, 0);
+});
+
+test("keeps manually added custom audio downloadable", async () => {
+  const store = createTrackStore();
+
+  const custom = await findOrCreateSpotifyTrack(store, baseTrack, 0, "custom");
+
+  assert.equal(custom.genre_tags, '["custom"]');
+  assert.equal(custom.is_downloadable, 1);
 });

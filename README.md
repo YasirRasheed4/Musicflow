@@ -133,7 +133,7 @@ account does not own or collaborate on cannot be fetched past that limit.
 - Spotify imports: public previews plus authorized, paginated playlist imports
   (up to 200 items)
 - Offline playback: save MusicFlow-hosted audio from an album's actions menu;
-  Spotify and YouTube streams cannot be downloaded by the app
+  Spotify previews and YouTube streams cannot be downloaded as full tracks
 - Top Listened: per-user playback rankings on Home
 - Downloads: tracks flagged `is_downloadable` show a direct download link; others don't
 

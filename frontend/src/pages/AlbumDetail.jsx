@@ -242,6 +242,11 @@ export default function AlbumDetail() {
                 : offlineNotice?.text}
             </p>
           )}
+          {tracks.some((track) => track.genreTags?.includes("spotify")) && (
+            <p role="status" className="mt-2 text-sm text-muted">
+              Spotify provides previews only here. Full-track downloads aren&apos;t available; use Spotify&apos;s official offline playback or upload audio you own.
+            </p>
+          )}
           {tracks.length > 0 && offlineStatus.availableCount === 0 && !offlineNotice && (
             <p className="mt-2 text-sm text-muted">
                 Offline saving is not supported for this album&apos;s audio source.

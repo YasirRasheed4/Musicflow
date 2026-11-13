@@ -209,7 +209,7 @@ export default function ImportSpotifyModal({
         }, options);
         await refresh();
         await onAlbumsChanged?.();
-        setSuccessMsg(`Successfully imported "${res.playlist.name}" with full-length playback!`);
+        setSuccessMsg(`Successfully imported "${res.playlist.name}". Spotify playback uses previews.`);
         setTimeout(() => {
           onClose();
           navigate(`/playlists/${res.playlist.id}`);
@@ -221,7 +221,7 @@ export default function ImportSpotifyModal({
         });
         await refresh();
         await onAlbumsChanged?.();
-        setSuccessMsg(`Added "${res.track.title}" with full song playback!`);
+        setSuccessMsg(`Added "${res.track.title}". Spotify playback uses previews.`);
         setTimeout(() => {
           onClose();
           if (targetPlaylistId) navigate(`/playlists/${targetPlaylistId}`);
@@ -399,7 +399,7 @@ export default function ImportSpotifyModal({
             </div>
             <div>
               <h2 className="font-display text-lg font-bold text-ink">Add Music</h2>
-              <p className="text-xs text-muted">Full-length Spotify importing & local audio uploads</p>
+              <p className="text-xs text-muted">Spotify previews & local audio uploads</p>
             </div>
           </div>
           <button

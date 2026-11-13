@@ -7,16 +7,16 @@ async function findOrCreateSpotifyTrack(connection, {
   coverUrl,
   isExplicit,
   releaseDate,
-}, occurrenceIndex = 0) {
+}, occurrenceIndex = 0, sourceTag = "spotify") {
   const cleanTitle = String(title || "Untitled Track").trim();
   const existingTracks = await connection
     .prepare(`
       SELECT * FROM tracks
       WHERE LOWER(title) = LOWER(?) AND artist_id = ? AND album_id = ?
-        AND LOWER(COALESCE(genre_tags, '')) LIKE '%spotify%'
+        AND LOWER(COALESCE(genre_tags, '')) LIKE ?
       ORDER BY id
     `)
-    .all(cleanTitle, artistId, albumId);
+    .all(cleanTitle, artistId, albumId, `%${sourceTag}%`);
   if (existingTracks[occurrenceIndex]) return existingTracks[occurrenceIndex];
 
   const result = await connection
@@ -32,9 +32,9 @@ async function findOrCreateSpotifyTrack(connection, {
       duration || 180,
       audioUrl,
       coverUrl,
-      JSON.stringify(["spotify"]),
+      JSON.stringify([sourceTag]),
       JSON.stringify(["imported"]),
-      1,
+      sourceTag === "spotify" ? 0 : 1,
       isExplicit ? 1 : 0,
       releaseDate || new Date().toISOString().slice(0, 10)
     );

@@ -8,6 +8,7 @@ function parseTags(text) {
 
 function track(row) {
   if (!row) return null;
+  const genreTags = parseTags(row.genre_tags);
   return {
     id: row.id,
     title: row.title,
@@ -18,9 +19,9 @@ function track(row) {
     duration: row.duration,
     audioUrl: row.audio_url,
     coverUrl: row.cover_url,
-    genreTags: parseTags(row.genre_tags),
+    genreTags,
     moodTags: parseTags(row.mood_tags),
-    isDownloadable: !!row.is_downloadable,
+    isDownloadable: !!row.is_downloadable && !genreTags.includes("spotify"),
     isExplicit: !!row.is_explicit,
     releaseDate: row.release_date,
   };

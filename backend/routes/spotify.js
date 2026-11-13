@@ -230,7 +230,7 @@ router.post("/custom-track", requireAuth, asyncHandler(async (req, res) => {
         audioUrl: (audioUrl && audioUrl.trim()) || "/audio/neon-tide.wav",
         coverUrl: (coverUrl && coverUrl.trim()) || "/covers/neon-tide.png",
         isExplicit: false,
-      });
+      }, 0, "custom");
 
       if (playlistId) {
         const playlist = await connection
