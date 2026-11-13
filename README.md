@@ -75,6 +75,8 @@ Root Directory to the repository root (`.`), not `frontend` or `backend`.
 Requests to `/api/*` go to the backend; all other paths, including `/audio/*`
 and `/covers/*`, go to the frontend. The frontend calls the API through the
 same-origin `/api` path, so leave `VITE_API_URL` unset for this deployment.
+The frontend includes Vercel Speed Insights; after deployment, visit the
+project's **Speed Insights** page to view collected performance metrics.
 
 Install a PostgreSQL database integration such as Neon from Vercel's
 Marketplace, connect it to this Vercel project, and make its PostgreSQL

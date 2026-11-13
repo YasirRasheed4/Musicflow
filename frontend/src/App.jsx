@@ -1,4 +1,5 @@
 import { Routes, Route } from "react-router-dom";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AuthProvider } from "./context/AuthContext";
 import { PlayerProvider } from "./context/PlayerContext";
@@ -47,6 +48,7 @@ export default function App() {
                 </div>
                 <PlayerBar />
                 <MobileNav />
+                <SpeedInsights />
               </div>
             </PlayerProvider>
           </PlaylistsProvider>
