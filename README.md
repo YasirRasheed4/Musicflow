@@ -135,7 +135,7 @@ account does not own or collaborate on cannot be fetched past that limit.
 - Admin panel for managing catalog content
 - Artist detail pages (the API route exists at `GET /api/artists/:id`; there's just no page for it yet)
 - Real download entitlement tracking / expiry
-- Recommendations, analytics, playback history surfaced anywhere in the UI (the `playback_history` table exists but nothing writes to it yet)
+- A personal **Top Listened** section on Home, ranked from each signed-in user's playback history
 - Regional restrictions, admin roles/permissions beyond a `role` column
 
 ## Project structure

@@ -120,11 +120,15 @@ async function fetchAuthorizedPlaylistTracks(id, accessToken, playlistName, cove
       const artistName =
         (track.artists || []).map((artist) => artist.name).filter(Boolean).join(", ") ||
         "Unknown Artist";
+      const albumTitle = album.name || `${playlistName} (Compilation)`;
       const trackCoverUrl = album.images?.[0]?.url || coverUrl || "/covers/neon-tide.png";
       tracks.push({
         title: track.name || "Untitled Track",
         artistName,
-        albumTitle: album.name || `${playlistName} (Compilation)`,
+        albumTitle,
+        albumArtistName: album.name
+          ? (album.artists || []).map((artist) => artist.name).filter(Boolean).join(", ") || artistName
+          : "Various Artists",
         duration: track.duration_ms ? Math.round(track.duration_ms / 1000) : 180,
         audioUrl: track.preview_url || getRandomFallbackAudio(),
         coverUrl: trackCoverUrl,
@@ -172,6 +176,7 @@ async function getSpotifyPlaylist(id, accessToken) {
   const tracks = rawTracks.map((t, i) => {
     const title = t.title || t.name || `Track ${i + 1}`;
     const artistName = t.subtitle || (t.artists && t.artists.map((a) => a.name).join(", ")) || "Unknown Artist";
+    const albumTitle = t.album?.name || `${name} (Compilation)`;
     const durationSeconds = t.duration ? Math.round(t.duration / 1000) : 180;
     const audioUrl = t.audioPreview?.url || getRandomFallbackAudio();
     const trackCoverUrl =
@@ -182,7 +187,10 @@ async function getSpotifyPlaylist(id, accessToken) {
     return {
       title,
       artistName,
-      albumTitle: t.album?.name || `${name} (Compilation)`,
+      albumTitle,
+      albumArtistName: t.album?.name
+        ? (t.album.artists || []).map((artist) => artist.name).filter(Boolean).join(", ") || artistName
+        : "Various Artists",
       duration: durationSeconds,
       audioUrl,
       coverUrl: trackCoverUrl,
@@ -215,6 +223,9 @@ async function getSpotifyTrack(id) {
     entity.subtitle ||
     "Unknown Artist";
   const albumTitle = entity.album?.name || "Single";
+  const albumArtistName =
+    (entity.album?.artists || []).map((artist) => artist.name).filter(Boolean).join(", ") ||
+    artistName;
   const durationSeconds = entity.duration ? Math.round(entity.duration / 1000) : 180;
   const audioUrl = entity.audioPreview?.url || getRandomFallbackAudio();
   const coverUrl =
@@ -229,6 +240,7 @@ async function getSpotifyTrack(id) {
     title,
     artistName,
     albumTitle,
+    albumArtistName,
     duration: durationSeconds,
     audioUrl,
     coverUrl,
@@ -255,12 +267,17 @@ async function getSpotifyAlbum(id) {
   const rawTracks = entity.trackList || [];
   const tracks = rawTracks.map((t, i) => {
     const title = t.title || t.name || `Track ${i + 1}`;
+    const trackArtistName =
+      t.subtitle ||
+      (t.artists && t.artists.map((artist) => artist.name).filter(Boolean).join(", ")) ||
+      artistName;
     const durationSeconds = t.duration ? Math.round(t.duration / 1000) : 180;
     const audioUrl = t.audioPreview?.url || getRandomFallbackAudio();
     return {
       title,
-      artistName,
+      artistName: trackArtistName,
       albumTitle: name,
+      albumArtistName: artistName,
       duration: durationSeconds,
       audioUrl,
       coverUrl,

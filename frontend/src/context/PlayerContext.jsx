@@ -1,10 +1,12 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { api } from "../api";
 import { Equalizer } from "../utils/equalizer";
+import { useAuth } from "./AuthContext";
 
 const PlayerContext = createContext(null);
 
 export function PlayerProvider({ children }) {
+  const { user } = useAuth();
   const audioRef = useRef(null);
   const ytPlayerRef = useRef(null);
   const eqRef = useRef(null);
@@ -12,6 +14,10 @@ export function PlayerProvider({ children }) {
   const queueRef = useRef([]);
   const indexRef = useRef(-1);
   const modeRef = useRef("audio"); // "audio" | "youtube"
+  const userRef = useRef(user);
+  const playbackSessionRef = useRef(0);
+  const currentPlaybackTrackIdRef = useRef(null);
+  const reportedPlaybackSessionRef = useRef(0);
 
   const [queue, setQueue] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
@@ -20,6 +26,30 @@ export function PlayerProvider({ children }) {
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(0.8);
   const [loadingAudio, setLoadingAudio] = useState(false);
+  const [playbackHistoryVersion, setPlaybackHistoryVersion] = useState(0);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  const recordPlayback = useCallback((session = playbackSessionRef.current, trackId = currentPlaybackTrackIdRef.current) => {
+    if (
+      !userRef.current ||
+      !trackId ||
+      session !== playbackSessionRef.current ||
+      reportedPlaybackSessionRef.current === session
+    ) {
+      return;
+    }
+
+    reportedPlaybackSessionRef.current = session;
+    api.post("/history/plays", { trackId })
+      .then(() => setPlaybackHistoryVersion((version) => version + 1))
+      .catch((error) => {
+        if (playbackSessionRef.current === session) reportedPlaybackSessionRef.current = 0;
+        console.error("Failed to record playback history:", error);
+      });
+  }, []);
 
   useEffect(() => {
     queueRef.current = queue;
@@ -48,7 +78,10 @@ export function PlayerProvider({ children }) {
             events: {
               onStateChange: (event) => {
                 // 1: PLAYING, 2: PAUSED, 0: ENDED, 3: BUFFERING
-                if (event.data === 1) setIsPlaying(true);
+                if (event.data === 1) {
+                  setIsPlaying(true);
+                  recordPlayback();
+                }
                 else if (event.data === 2) setIsPlaying(false);
                 else if (event.data === 0) {
                   const q = queueRef.current;
@@ -79,7 +112,7 @@ export function PlayerProvider({ children }) {
       }, 300);
       return () => clearInterval(timer);
     }
-  }, [volume]);
+  }, [recordPlayback, volume]);
 
   // YouTube progress tracking timer
   useEffect(() => {
@@ -106,6 +139,9 @@ export function PlayerProvider({ children }) {
       if (index < 0 || index >= q.length) return;
 
       const track = q[index];
+      playbackSessionRef.current += 1;
+      currentPlaybackTrackIdRef.current = track.id;
+      const playbackSession = playbackSessionRef.current;
       setCurrentIndex(index);
       indexRef.current = index;
       setProgress(0);
@@ -129,7 +165,7 @@ export function PlayerProvider({ children }) {
         if (audio) {
           audio.src = track.audioUrl;
           audio.currentTime = 0;
-          audio.play().catch(() => {});
+          audio.play().then(() => recordPlayback(playbackSession, track.id)).catch(() => {});
         }
       } else {
         // Mode: YouTube Full Song Stream
@@ -172,11 +208,11 @@ export function PlayerProvider({ children }) {
           modeRef.current = "audio";
           audio.src = track.audioUrl;
           audio.currentTime = 0;
-          audio.play().catch(() => {});
+          audio.play().then(() => recordPlayback(playbackSession, track.id)).catch(() => {});
         }
       }
     },
-    []
+    [recordPlayback]
   );
 
   // Setup HTML5 Audio listeners
@@ -200,7 +236,10 @@ export function PlayerProvider({ children }) {
       }
     };
     const onPlay = () => {
-      if (modeRef.current === "audio") setIsPlaying(true);
+      if (modeRef.current === "audio") {
+        setIsPlaying(true);
+        recordPlayback();
+      }
     };
     const onPause = () => {
       if (modeRef.current === "audio") setIsPlaying(false);
@@ -220,7 +259,7 @@ export function PlayerProvider({ children }) {
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
     };
-  }, [playAt, volume]);
+  }, [playAt, recordPlayback, volume]);
 
   // Setup Equalizer
   useEffect(() => {
@@ -379,6 +418,7 @@ export function PlayerProvider({ children }) {
         ytPlayerRef.current.stopVideo();
       } catch (e) {}
     }
+    currentPlaybackTrackIdRef.current = null;
     setQueue([]);
     setCurrentIndex(-1);
     setIsPlaying(false);
@@ -396,6 +436,7 @@ export function PlayerProvider({ children }) {
         currentIndex,
         isPlaying,
         loadingAudio,
+        playbackHistoryVersion,
         progress,
         duration,
         volume,

@@ -15,6 +15,7 @@ const playlistRoutes = require("./routes/playlists");
 const favoritesRoutes = require("./routes/favorites");
 const spotifyRoutes = require("./routes/spotify");
 const rotationRoutes = require("./routes/rotation");
+const historyRoutes = require("./routes/history");
 
 const PORT = process.env.PORT || 4000;
 const app = express();
@@ -41,6 +42,7 @@ app.use("/api/favorites", favoritesRoutes);
 app.use("/api/playlists", playlistRoutes);
 app.use("/api/spotify", spotifyRoutes);
 app.use("/api/rotation", rotationRoutes);
+app.use("/api/history", historyRoutes);
 app.use("/api", trackRoutes);
 app.use("/api", albumRoutes);
 app.use("/api", artistRoutes);

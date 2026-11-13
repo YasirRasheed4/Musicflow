@@ -52,7 +52,17 @@ async function findOrCreateAlbum(connection, title, artistId, coverUrl, releaseD
   return album;
 }
 
-async function findOrCreateTrack(connection, { title, artistId, albumId, duration, audioUrl, coverUrl, isExplicit, releaseDate }) {
+async function findOrCreateTrack(connection, {
+  title,
+  artistId,
+  albumId,
+  duration,
+  audioUrl,
+  coverUrl,
+  isExplicit,
+  releaseDate,
+  preferAlbum = false,
+}) {
   const cleanTitle = (title || "Untitled Track").trim();
   let track = await connection
     .prepare("SELECT * FROM tracks WHERE LOWER(title) = LOWER(?) AND artist_id = ?")
@@ -79,6 +89,9 @@ async function findOrCreateTrack(connection, { title, artistId, albumId, duratio
         releaseDate || new Date().toISOString().slice(0, 10)
       );
     track = await connection.prepare("SELECT * FROM tracks WHERE id = ?").get(result.lastInsertRowid);
+  } else if (preferAlbum && track.album_id !== albumId) {
+    await connection.prepare("UPDATE tracks SET album_id = ? WHERE id = ?").run(albumId, track.id);
+    track = await connection.prepare("SELECT * FROM tracks WHERE id = ?").get(track.id);
   }
   return track;
 }
@@ -128,7 +141,17 @@ router.post("/import-playlist", requireAuth, asyncHandler(async (req, res) => {
       );
       for (const [i, t] of spotifyData.tracks.entries()) {
         const artist = await findOrCreateArtist(connection, t.artistName);
-        const album = await findOrCreateAlbum(connection, t.albumTitle, artist.id, t.coverUrl, t.releaseDate);
+        const albumArtist = await findOrCreateArtist(
+          connection,
+          t.albumArtistName || (t.albumTitle?.endsWith("(Compilation)") ? "Various Artists" : t.artistName)
+        );
+        const album = await findOrCreateAlbum(
+          connection,
+          t.albumTitle,
+          albumArtist.id,
+          t.coverUrl,
+          t.releaseDate
+        );
         const track = await findOrCreateTrack(connection, {
           title: t.title,
           artistId: artist.id,
@@ -138,6 +161,7 @@ router.post("/import-playlist", requireAuth, asyncHandler(async (req, res) => {
           coverUrl: t.coverUrl,
           isExplicit: t.isExplicit,
           releaseDate: t.releaseDate,
+          preferAlbum: spotifyData.type === "album",
         });
         await insertPlaylistTrack.run(id, track.id, i);
       }
@@ -170,7 +194,17 @@ router.post("/import-track", requireAuth, asyncHandler(async (req, res) => {
 
     const track = await db.transaction(async (connection) => {
       const artist = await findOrCreateArtist(connection, spotifyData.artistName);
-      const album = await findOrCreateAlbum(connection, spotifyData.albumTitle, artist.id, spotifyData.coverUrl, spotifyData.releaseDate);
+      const albumArtist = await findOrCreateArtist(
+        connection,
+        spotifyData.albumArtistName || spotifyData.artistName
+      );
+      const album = await findOrCreateAlbum(
+        connection,
+        spotifyData.albumTitle,
+        albumArtist.id,
+        spotifyData.coverUrl,
+        spotifyData.releaseDate
+      );
       const createdTrack = await findOrCreateTrack(connection, {
       title: spotifyData.title,
       artistId: artist.id,
@@ -180,6 +214,7 @@ router.post("/import-track", requireAuth, asyncHandler(async (req, res) => {
       coverUrl: spotifyData.coverUrl,
       isExplicit: spotifyData.isExplicit,
       releaseDate: spotifyData.releaseDate,
+      preferAlbum: true,
       });
 
       if (playlistId) {
@@ -218,7 +253,12 @@ router.post("/custom-track", requireAuth, asyncHandler(async (req, res) => {
   try {
     const track = await db.transaction(async (connection) => {
       const artist = await findOrCreateArtist(connection, artistName || "Independent Artist");
-      const album = await findOrCreateAlbum(connection, albumTitle || "Single", artist.id, coverUrl || "/covers/neon-tide.png");
+      const album = await findOrCreateAlbum(
+        connection,
+        albumTitle || "Single",
+        artist.id,
+        coverUrl || "/covers/neon-tide.png"
+      );
       const createdTrack = await findOrCreateTrack(connection, {
       title: title.trim(),
       artistId: artist.id,

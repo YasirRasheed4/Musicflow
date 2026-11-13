@@ -121,6 +121,87 @@ if (process.env.DB_CLIENT === "sqlite") {
     }
   }
 
+  const compilationAlbumMigration = "merge-spotify-compilation-albums";
+  const compilationAlbumMigrationApplied = connection
+    .prepare("SELECT name FROM app_migrations WHERE name = ?")
+    .get(compilationAlbumMigration);
+  if (!compilationAlbumMigrationApplied) {
+    connection.exec("BEGIN");
+    try {
+      const compilationAlbums = connection.prepare(`
+        SELECT id, title, cover_url
+        FROM albums
+        WHERE LOWER(COALESCE(label, '')) = 'spotify'
+          AND LOWER(title) LIKE '% (compilation)'
+        ORDER BY id
+      `).all();
+      const albumsByTitle = new Map();
+      for (const album of compilationAlbums) {
+        const key = album.title.toLowerCase();
+        if (!albumsByTitle.has(key)) albumsByTitle.set(key, []);
+        albumsByTitle.get(key).push(album);
+      }
+
+      let variousArtists = connection
+        .prepare("SELECT id FROM artists WHERE LOWER(name) = LOWER(?)")
+        .get("Various Artists");
+      if (albumsByTitle.size && !variousArtists) {
+        const result = connection
+          .prepare("INSERT INTO artists (name, bio, genre_tags) VALUES (?, ?, ?)")
+          .run("Various Artists", "Albums with multiple featured artists.", '["imported"]');
+        variousArtists = { id: result.lastInsertRowid };
+      }
+
+      for (const albums of albumsByTitle.values()) {
+        const orderedAlbums = [...albums].sort((a, b) => {
+          const aHasCustomCover = a.cover_url?.startsWith("data:image/") ? 1 : 0;
+          const bHasCustomCover = b.cover_url?.startsWith("data:image/") ? 1 : 0;
+          return bHasCustomCover - aHasCustomCover || a.id - b.id;
+        });
+        const [canonical, ...duplicates] = orderedAlbums;
+        const ids = albums.map((album) => album.id);
+        const placeholders = ids.map(() => "?").join(", ");
+        const rotationOrder = connection.prepare(`
+          SELECT MIN(sort_order) AS sort_order
+          FROM rotation_albums
+          WHERE album_id IN (${placeholders})
+        `).get(...ids).sort_order;
+
+        connection.prepare("UPDATE albums SET artist_id = ? WHERE id = ?")
+          .run(variousArtists.id, canonical.id);
+
+        if (duplicates.length) {
+          const coverUrl = canonical.cover_url?.startsWith("data:image/")
+            ? `/api/albums/${canonical.id}/cover`
+            : canonical.cover_url;
+          connection.prepare(`
+            UPDATE tracks
+            SET album_id = ?, cover_url = COALESCE(?, cover_url)
+            WHERE album_id IN (${placeholders})
+          `).run(canonical.id, coverUrl, ...ids);
+
+          if (rotationOrder !== null) {
+            connection.prepare("INSERT OR IGNORE INTO rotation_albums (album_id, sort_order) VALUES (?, ?)")
+              .run(canonical.id, rotationOrder);
+            connection.prepare("UPDATE rotation_albums SET sort_order = ? WHERE album_id = ?")
+              .run(rotationOrder, canonical.id);
+          }
+
+          connection.prepare(`DELETE FROM rotation_albums WHERE album_id IN (${placeholders}) AND album_id != ?`)
+            .run(...ids, canonical.id);
+          connection.prepare(`DELETE FROM albums WHERE id IN (${placeholders}) AND id != ?`)
+            .run(...ids, canonical.id);
+        }
+      }
+
+      connection.prepare("INSERT INTO app_migrations (name) VALUES (?)").run(compilationAlbumMigration);
+      connection.exec("COMMIT");
+    } catch (error) {
+      connection.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   function prepare(sql) {
     const statement = connection.prepare(
       sql.replace(/\bINSERT\s+IGNORE\s+INTO\b/gi, "INSERT OR IGNORE INTO")
@@ -294,6 +375,80 @@ if (process.env.DB_CLIENT === "sqlite") {
           await connection.prepare("DELETE FROM playback_history WHERE user_id IN (SELECT id FROM users WHERE email = ?)").run("demo@musicflow.app");
           await connection.prepare("DELETE FROM playlists WHERE user_id IN (SELECT id FROM users WHERE email = ?)").run("demo@musicflow.app");
           await connection.prepare("DELETE FROM users WHERE email = ?").run("demo@musicflow.app");
+          await connection.prepare("INSERT IGNORE INTO app_migrations (name) VALUES (?)").run(migrationName);
+        })
+      ).then(() =>
+        transaction(async (connection) => {
+          const migrationName = "merge-spotify-compilation-albums";
+          const applied = await connection.prepare("SELECT name FROM app_migrations WHERE name = ?").get(migrationName);
+          if (applied) return;
+
+          const compilationAlbums = await connection.prepare(`
+            SELECT id, title, cover_url
+            FROM albums
+            WHERE LOWER(COALESCE(label, '')) = 'spotify'
+              AND LOWER(title) LIKE '% (compilation)'
+            ORDER BY id
+          `).all();
+          const albumsByTitle = new Map();
+          for (const album of compilationAlbums) {
+            const key = album.title.toLowerCase();
+            if (!albumsByTitle.has(key)) albumsByTitle.set(key, []);
+            albumsByTitle.get(key).push(album);
+          }
+
+          let variousArtists = await connection
+            .prepare("SELECT id FROM artists WHERE LOWER(name) = LOWER(?)")
+            .get("Various Artists");
+          if (albumsByTitle.size && !variousArtists) {
+            const result = await connection
+              .prepare("INSERT INTO artists (name, bio, genre_tags) VALUES (?, ?, ?)")
+              .run("Various Artists", "Albums with multiple featured artists.", '["imported"]');
+            variousArtists = { id: result.lastInsertRowid };
+          }
+
+          for (const albums of albumsByTitle.values()) {
+            const orderedAlbums = [...albums].sort((a, b) => {
+              const aHasCustomCover = a.cover_url?.startsWith("data:image/") ? 1 : 0;
+              const bHasCustomCover = b.cover_url?.startsWith("data:image/") ? 1 : 0;
+              return bHasCustomCover - aHasCustomCover || a.id - b.id;
+            });
+            const [canonical, ...duplicates] = orderedAlbums;
+            const ids = albums.map((album) => album.id);
+            const placeholders = ids.map(() => "?").join(", ");
+            const { sort_order: rotationOrder } = await connection.prepare(`
+              SELECT MIN(sort_order) AS sort_order
+              FROM rotation_albums
+              WHERE album_id IN (${placeholders})
+            `).get(...ids);
+
+            await connection.prepare("UPDATE albums SET artist_id = ? WHERE id = ?")
+              .run(variousArtists.id, canonical.id);
+
+            if (duplicates.length) {
+              const coverUrl = canonical.cover_url?.startsWith("data:image/")
+                ? `/api/albums/${canonical.id}/cover`
+                : canonical.cover_url;
+              await connection.prepare(`
+                UPDATE tracks
+                SET album_id = ?, cover_url = COALESCE(?, cover_url)
+                WHERE album_id IN (${placeholders})
+              `).run(canonical.id, coverUrl, ...ids);
+
+              if (rotationOrder !== null) {
+                await connection.prepare("INSERT IGNORE INTO rotation_albums (album_id, sort_order) VALUES (?, ?)")
+                  .run(canonical.id, rotationOrder);
+                await connection.prepare("UPDATE rotation_albums SET sort_order = ? WHERE album_id = ?")
+                  .run(rotationOrder, canonical.id);
+              }
+
+              await connection.prepare(`DELETE FROM rotation_albums WHERE album_id IN (${placeholders}) AND album_id != ?`)
+                .run(...ids, canonical.id);
+              await connection.prepare(`DELETE FROM albums WHERE id IN (${placeholders}) AND id != ?`)
+                .run(...ids, canonical.id);
+            }
+          }
+
           await connection.prepare("INSERT IGNORE INTO app_migrations (name) VALUES (?)").run(migrationName);
         })
       );

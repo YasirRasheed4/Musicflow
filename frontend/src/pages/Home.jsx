@@ -16,13 +16,14 @@ export default function Home() {
   const [rotationAlbums, setRotationAlbums] = useState([]);
   const [rotationAlbumId, setRotationAlbumId] = useState("");
   const [tracks, setTracks] = useState([]);
+  const [topTracks, setTopTracks] = useState([]);
   const [addTrack, setAddTrack] = useState(null);
   const [coverAlbumId, setCoverAlbumId] = useState(null);
   const [uploadingCoverId, setUploadingCoverId] = useState(null);
   const [showSpotifyImport, setShowSpotifyImport] = useState(false);
   const [error, setError] = useState("");
   const coverInputRef = useRef(null);
-  const { playTrack } = usePlayer();
+  const { playTrack, playbackHistoryVersion } = usePlayer();
   const { user } = useAuth();
   const { renamePlaylist, deletePlaylist } = usePlaylists();
 
@@ -35,6 +36,26 @@ export default function Home() {
     api.get("/albums").then((res) => setAlbums(res.albums));
     api.get("/tracks?limit=8").then((res) => setTracks(res.tracks));
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setTopTracks([]);
+      return;
+    }
+
+    let active = true;
+    api.get("/history/top")
+      .then((res) => {
+        if (active) setTopTracks(res.tracks);
+      })
+      .catch((err) => {
+        if (active) setError(err.message || "Failed to load Top Listened");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id, playbackHistoryVersion]);
 
   const playAlbum = useCallback(
     async (id) => {
@@ -288,6 +309,22 @@ export default function Home() {
                 queue={tracks}
                 onAddToPlaylist={setAddTrack}
                 onDelete={user ? handleDeleteTrack : undefined}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {topTracks.length > 0 && (
+        <section>
+          <h2 className="mb-3 font-display text-xl">Top Listened</h2>
+          <div className="flex flex-col">
+            {topTracks.map((track, index) => (
+              <TrackRow
+                key={track.id}
+                track={track}
+                index={index + 1}
+                queue={topTracks}
               />
             ))}
           </div>
