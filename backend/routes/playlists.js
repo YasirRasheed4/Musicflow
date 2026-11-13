@@ -42,7 +42,7 @@ router.get("/public", asyncHandler(async (_req, res) => {
 
 router.get("/", requireAuth, asyncHandler(async (req, res) => {
   const rows = await db
-    .prepare(`${PLAYLIST_QUERY} WHERE user_id = ? ORDER BY created_at DESC`)
+    .prepare(`${PLAYLIST_QUERY} WHERE user_id = ? OR is_default = 1 ORDER BY created_at DESC`)
     .all(req.user.id);
   res.json({ playlists: rows.map(serialize.playlist) });
 }));
