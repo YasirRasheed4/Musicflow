@@ -112,24 +112,26 @@ export default function AlbumDetail() {
           <p className="mt-1 text-muted">
             {album.artistName} · {album.releaseDate?.slice(0, 4)} · {album.label}
           </p>
-          <button
-            onClick={() => tracks.length && playTrack(tracks[0], tracks)}
-            className="mt-4 flex items-center gap-2 rounded-full bg-accent px-5 py-2 font-semibold text-bg"
-          >
-            <Play size={16} fill="currentColor" /> Play
-          </button>
-          {user && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              <input
-                ref={coverInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleCoverUpload}
-                className="hidden"
-              />
-              <OverflowMenu actions={albumActions} label="Album actions" />
-            </div>
-          )}
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-3 sm:justify-start">
+            <button
+              onClick={() => tracks.length && playTrack(tracks[0], tracks)}
+              className="flex items-center gap-2 rounded-full bg-accent px-5 py-2 font-semibold text-bg"
+            >
+              <Play size={16} fill="currentColor" /> Play
+            </button>
+            {user && (
+              <>
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleCoverUpload}
+                  className="hidden"
+                />
+                <OverflowMenu actions={albumActions} label="Album actions" />
+              </>
+            )}
+          </div>
         </div>
       </div>
 
