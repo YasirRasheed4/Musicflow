@@ -58,7 +58,11 @@ router.get("/search", asyncHandler(async (req, res) => {
   const like = `%${q}%`;
 
   const tracks = (await db
-    .prepare(`${TRACK_SELECT} WHERE tracks.title LIKE ? OR artists.name LIKE ? ORDER BY tracks.id LIMIT 25`)
+    .prepare(
+      `${TRACK_SELECT}
+       WHERE LOWER(tracks.title) LIKE LOWER(?) OR LOWER(artists.name) LIKE LOWER(?)
+       ORDER BY tracks.id LIMIT 25`
+    )
     .all(like, like))
     .map(serialize.track);
 
@@ -66,13 +70,14 @@ router.get("/search", asyncHandler(async (req, res) => {
     .prepare(
       `SELECT albums.*, artists.name AS artist_name FROM albums
        JOIN artists ON artists.id = albums.artist_id
-       WHERE albums.title LIKE ? OR artists.name LIKE ? ORDER BY albums.id LIMIT 15`
+       WHERE LOWER(albums.title) LIKE LOWER(?) OR LOWER(artists.name) LIKE LOWER(?)
+       ORDER BY albums.id LIMIT 15`
     )
     .all(like, like))
     .map(serialize.album);
 
   const artists = (await db
-    .prepare("SELECT * FROM artists WHERE name LIKE ? ORDER BY id LIMIT 15")
+    .prepare("SELECT * FROM artists WHERE LOWER(name) LIKE LOWER(?) ORDER BY id LIMIT 15")
     .all(like))
     .map(serialize.artist);
 
