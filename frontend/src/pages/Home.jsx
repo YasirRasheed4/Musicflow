@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
+import { Sparkles } from "lucide-react";
 import Card from "../components/Card";
 import TrackRow from "../components/TrackRow";
 import AddToPlaylistModal from "../components/AddToPlaylistModal";
+import ImportSpotifyModal from "../components/ImportSpotifyModal";
 import { api } from "../api";
 import { usePlayer } from "../context/PlayerContext";
 import { useAuth } from "../context/AuthContext";
@@ -14,6 +16,7 @@ export default function Home() {
   const [rotationAlbumId, setRotationAlbumId] = useState("");
   const [tracks, setTracks] = useState([]);
   const [addTrack, setAddTrack] = useState(null);
+  const [showSpotifyImport, setShowSpotifyImport] = useState(false);
   const [error, setError] = useState("");
   const { playTrack } = usePlayer();
   const { user } = useAuth();
@@ -126,9 +129,20 @@ export default function Home() {
   return (
     <div className="flex flex-col gap-10 pb-10">
       {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
-      <div>
-        <h1 className="font-display text-3xl">Good listening.</h1>
-        <p className="text-muted">Editorial picks and new arrivals, for tonight.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="font-display text-3xl">Good listening.</h1>
+          <p className="text-muted">Editorial picks and new arrivals, for tonight.</p>
+        </div>
+        {user && (
+          <button
+            type="button"
+            onClick={() => setShowSpotifyImport(true)}
+            className="inline-flex items-center gap-2 self-start rounded-full bg-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition sm:self-auto"
+          >
+            <Sparkles size={16} /> Import from Spotify
+          </button>
+        )}
       </div>
 
       {(playlists.length > 0 || rotationAlbums.length > 0 || (user && availableRotationAlbums.length > 0)) && (
@@ -229,6 +243,7 @@ export default function Home() {
       )}
 
       {addTrack && <AddToPlaylistModal track={addTrack} onClose={() => setAddTrack(null)} />}
+      {showSpotifyImport && <ImportSpotifyModal onClose={() => setShowSpotifyImport(false)} />}
     </div>
   );
 }
