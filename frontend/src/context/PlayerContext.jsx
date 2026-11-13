@@ -18,6 +18,7 @@ export function PlayerProvider({ children }) {
   const playbackSessionRef = useRef(0);
   const currentPlaybackTrackIdRef = useRef(null);
   const reportedPlaybackSessionRef = useRef(0);
+  const youtubeVideoIdsRef = useRef(new Map());
 
   const [queue, setQueue] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
@@ -175,6 +176,8 @@ export function PlayerProvider({ children }) {
         let videoId = "";
         if (track.audioUrl && track.audioUrl.startsWith("youtube:")) {
           videoId = track.audioUrl.replace("youtube:", "");
+        } else if (youtubeVideoIdsRef.current.has(track.id)) {
+          videoId = youtubeVideoIdsRef.current.get(track.id);
         } else {
           // Resolve on-demand from backend
           setLoadingAudio(true);
@@ -182,7 +185,7 @@ export function PlayerProvider({ children }) {
             const res = await api.get(`/tracks/${track.id}/youtube`);
             if (res.videoId) {
               videoId = res.videoId;
-              track.audioUrl = `youtube:${videoId}`;
+              youtubeVideoIdsRef.current.set(track.id, videoId);
               if (res.duration) {
                 track.duration = res.duration;
                 setDuration(res.duration);

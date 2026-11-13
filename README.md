@@ -128,6 +128,9 @@ account does not own or collaborate on cannot be fetched past that limit.
   shared default playlists can be managed by any signed-in user
 - Spotify imports: public previews plus authorized, paginated playlist imports
   (up to 200 items)
+- Offline playback: save MusicFlow-hosted audio from an album's actions menu;
+  Spotify and YouTube streams cannot be downloaded by the app
+- Top Listened: per-user playback rankings on Home
 - Downloads: tracks flagged `is_downloadable` show a direct download link; others don't
 
 ## What's not built yet (Phase 2/3 in the PRD)
@@ -135,7 +138,6 @@ account does not own or collaborate on cannot be fetched past that limit.
 - Admin panel for managing catalog content
 - Artist detail pages (the API route exists at `GET /api/artists/:id`; there's just no page for it yet)
 - Real download entitlement tracking / expiry
-- A personal **Top Listened** section on Home, ranked from each signed-in user's playback history
 - Regional restrictions, admin roles/permissions beyond a `role` column
 
 ## Project structure
