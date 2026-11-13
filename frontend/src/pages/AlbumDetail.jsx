@@ -1,11 +1,58 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Pencil, Play, Trash2 } from "lucide-react";
+import { Pencil, Play, Trash2, UploadCloud } from "lucide-react";
 import TrackRow from "../components/TrackRow";
 import AddToPlaylistModal from "../components/AddToPlaylistModal";
 import { api } from "../api";
 import { usePlayer } from "../context/PlayerContext";
 import { useAuth } from "../context/AuthContext";
+
+const MAX_COVER_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_COVER_IMAGE_BYTES = 512 * 1024;
+
+async function compressCoverImage(file) {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Choose an image file.");
+  }
+  if (file.size > MAX_COVER_FILE_BYTES) {
+    throw new Error("Choose an image smaller than 10 MB.");
+  }
+
+  const image = await new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const element = new Image();
+    element.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(element);
+    };
+    element.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("The selected image could not be opened."));
+    };
+    element.src = objectUrl;
+  });
+
+  const scale = Math.min(1, 1000 / Math.max(image.naturalWidth, image.naturalHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Your browser could not process this image.");
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", 0.82));
+  if (!blob) throw new Error("Your browser could not compress this image.");
+  if (blob.size > MAX_COVER_IMAGE_BYTES) {
+    throw new Error("The compressed cover must be 512 KB or smaller. Try a smaller image.");
+  }
+
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("The compressed image could not be read."));
+    reader.readAsDataURL(blob);
+  });
+}
 
 export default function AlbumDetail() {
   const { id } = useParams();
@@ -13,7 +60,9 @@ export default function AlbumDetail() {
   const [album, setAlbum] = useState(null);
   const [tracks, setTracks] = useState([]);
   const [addTrack, setAddTrack] = useState(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [error, setError] = useState("");
+  const coverInputRef = useRef(null);
   const { playTrack } = usePlayer();
   const { user } = useAuth();
 
@@ -44,6 +93,24 @@ export default function AlbumDetail() {
       setTracks((previous) => previous.map((track) => ({ ...track, albumTitle: updatedAlbum.title })));
     } catch (err) {
       setError(err.message || "Failed to rename album");
+    }
+  };
+
+  const handleCoverUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError("");
+    setUploadingCover(true);
+    try {
+      const coverUrl = await compressCoverImage(file);
+      const { album: updatedAlbum } = await api.patch(`/albums/${album.id}`, { coverUrl });
+      setAlbum(updatedAlbum);
+      setTracks((previous) => previous.map((track) => ({ ...track, coverUrl: updatedAlbum.coverUrl })));
+    } catch (err) {
+      setError(err.message || "Failed to update album cover");
+    } finally {
+      setUploadingCover(false);
+      event.target.value = "";
     }
   };
 
@@ -78,6 +145,21 @@ export default function AlbumDetail() {
           </button>
           {user && (
             <div className="mt-3 flex flex-wrap gap-2">
+              <input
+                ref={coverInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleCoverUpload}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => coverInputRef.current?.click()}
+                disabled={uploadingCover}
+                className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink hover:bg-line disabled:opacity-50"
+              >
+                <UploadCloud size={16} /> {uploadingCover ? "Uploading cover..." : "Change cover photo"}
+              </button>
               <button
                 onClick={handleRenameAlbum}
                 className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink hover:bg-line"

@@ -28,13 +28,16 @@ function track(row) {
 
 function album(row) {
   if (!row) return null;
+  const coverUrl = typeof row.cover_url === "string" && row.cover_url.startsWith("data:image/")
+    ? `/api/albums/${row.id}/cover`
+    : row.cover_url;
   return {
     id: row.id,
     title: row.title,
     artistId: row.artist_id,
     artistName: row.artist_name,
     releaseDate: row.release_date,
-    coverUrl: row.cover_url,
+    coverUrl,
     label: row.label,
   };
 }

@@ -7,6 +7,7 @@ function isPublicApiPath(pathname) {
   return (
     pathname === "/api/albums" ||
     /^\/api\/albums\/\d+$/.test(pathname) ||
+    /^\/api\/albums\/\d+\/cover$/.test(pathname) ||
     pathname === "/api/tracks" ||
     /^\/api\/tracks\/\d+$/.test(pathname) ||
     pathname === "/api/search" ||

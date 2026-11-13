@@ -127,6 +127,7 @@ account does not own or collaborate on cannot be fetched past that limit.
 - Search across tracks, albums, and artists
 - Playback: persistent player bar, queue, seek, volume, skip — survives page navigation
 - Favorites (heart any track)
+- Albums: rename, delete, and upload replacement cover art from your device
 - Playlists: create, view, add tracks from anywhere, remove tracks, public/private
 - Spotify imports: public previews plus authorized, paginated playlist imports
   (up to 200 items)
