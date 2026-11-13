@@ -151,6 +151,7 @@ export function PlayerProvider({ children }) {
       const isLocalAudio =
         track.audioUrl &&
         (track.audioUrl.startsWith("/audio/") ||
+          /^\/api\/tracks\/\d+\/audio$/.test(track.audioUrl) ||
           track.audioUrl.endsWith(".wav") ||
           track.audioUrl.endsWith(".mp3") ||
           track.audioUrl.startsWith("blob:"));

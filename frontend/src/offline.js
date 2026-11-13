@@ -8,7 +8,9 @@ function getAudioCacheUrl(track) {
   } catch {
     return null;
   }
-  return url.origin === window.location.origin && url.pathname.startsWith("/audio/")
+  const isHostedAudio =
+    url.pathname.startsWith("/audio/") || /^\/api\/tracks\/\d+\/audio$/.test(url.pathname);
+  return url.origin === window.location.origin && isHostedAudio
     ? url.href
     : null;
 }

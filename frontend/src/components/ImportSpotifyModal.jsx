@@ -12,12 +12,14 @@ import {
   isSpotifyConfigured,
 } from "../spotifyAuth";
 
-export default function ImportSpotifyModal({ onClose, defaultPlaylistId }) {
+const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
+
+export default function ImportSpotifyModal({ onClose, defaultPlaylistId, initialTab = "spotify" }) {
   const navigate = useNavigate();
   const { playlists, refresh } = usePlaylists();
   const fileInputRef = useRef(null);
 
-  const [activeTab, setActiveTab] = useState("spotify"); // "spotify" | "upload" | "custom"
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [url, setUrl] = useState("");
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -167,13 +169,31 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId }) {
     }
   };
 
-  const handleFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const selectAudioFile = (file, input) => {
+    if (!file) {
+      setSelectedFile(null);
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setSelectedFile(null);
+      setError("Audio files must be 3 MB or smaller to upload.");
+      if (input) input.value = "";
+      return;
+    }
+    setError("");
     setSelectedFile(file);
     const baseName = file.name.replace(/\.[^/.]+$/, "");
     if (!fileTitle) setFileTitle(baseName);
     if (!fileArtist) setFileArtist("Local Artist");
+  };
+
+  const handleFileSelect = (e) => {
+    selectAudioFile(e.target.files?.[0], e.target);
+  };
+
+  const handleFileDrop = (e) => {
+    e.preventDefault();
+    selectAudioFile(e.dataTransfer.files?.[0]);
   };
 
   const handleUploadFile = async (e) => {
@@ -189,12 +209,15 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId }) {
       const reader = new FileReader();
       reader.onload = async () => {
         try {
+          if (typeof reader.result !== "string") throw new Error("Could not read the selected audio file.");
           const base64Data = reader.result.split(",")[1];
+          if (!base64Data) throw new Error("The selected audio file is empty or invalid.");
           const res = await api.post("/tracks/upload", {
             title: fileTitle.trim(),
             artistName: fileArtist.trim() || "Local Artist",
             albumTitle: fileAlbum.trim() || "Local Files",
             fileName: selectedFile.name,
+            contentType: selectedFile.type,
             base64Data,
             playlistId: targetPlaylistId || undefined,
           });
@@ -301,7 +324,7 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId }) {
               activeTab === "upload" ? "bg-bg text-ink shadow-sm" : "text-muted hover:text-ink"
             }`}
           >
-            Upload MP3
+            Upload from device
           </button>
           <button
             type="button"
@@ -487,19 +510,30 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId }) {
         {activeTab === "upload" && (
           <form onSubmit={handleUploadFile} className="space-y-3">
             <div
+              role="button"
+              tabIndex={0}
               onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleFileDrop}
               className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-line p-6 text-center transition hover:border-accent"
             >
               <UploadCloud size={32} className="mb-2 text-accent" />
               <p className="text-sm font-semibold text-ink">
                 {selectedFile ? selectedFile.name : "Click or drop an MP3/Audio file"}
               </p>
-              <p className="text-xs text-muted">Supports MP3, WAV, M4A, FLAC</p>
+              <p className="text-xs text-muted">MP3, WAV, M4A, FLAC, AAC, OGG, OPUS, or WEBM · max 3 MB</p>
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="audio/*"
                 onChange={handleFileSelect}
+                onClick={(e) => e.stopPropagation()}
                 className="hidden"
               />
             </div>
@@ -560,7 +594,7 @@ export default function ImportSpotifyModal({ onClose, defaultPlaylistId }) {
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-2.5 font-semibold text-bg transition hover:opacity-90 disabled:opacity-50"
             >
               {importing ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={18} />}
-              Upload & Play Full Song
+              Upload song
             </button>
           </form>
         )}

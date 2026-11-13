@@ -252,6 +252,7 @@ export default function PlaylistDetail() {
       {addTrack && <AddToPlaylistModal track={addTrack} onClose={() => setAddTrack(null)} />}
       {showAddModal && (
         <ImportSpotifyModal
+          initialTab="upload"
           defaultPlaylistId={playlist.id}
           onClose={() => {
             setShowAddModal(false);

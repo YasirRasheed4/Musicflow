@@ -1,5 +1,3 @@
-const fs = require("fs");
-const path = require("path");
 const { Router } = require("express");
 const db = require("../db");
 const serialize = require("../serialize");
@@ -7,6 +5,31 @@ const asyncHandler = require("../middleware/asyncHandler");
 const { requireAuth } = require("../middleware/auth");
 
 const router = Router();
+const MAX_AUDIO_UPLOAD_BYTES = 3 * 1024 * 1024;
+const AUDIO_TYPES = new Set([
+  "audio/aac",
+  "audio/flac",
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/mp4",
+  "audio/ogg",
+  "audio/opus",
+  "audio/wav",
+  "audio/webm",
+  "audio/x-flac",
+  "audio/x-m4a",
+  "audio/x-wav",
+]);
+const AUDIO_TYPE_BY_EXTENSION = {
+  aac: "audio/aac",
+  flac: "audio/flac",
+  m4a: "audio/mp4",
+  mp3: "audio/mpeg",
+  ogg: "audio/ogg",
+  opus: "audio/opus",
+  wav: "audio/wav",
+  webm: "audio/webm",
+};
 
 const TRACK_SELECT = `
   SELECT tracks.*, artists.name AS artist_name, albums.title AS album_title
@@ -50,6 +73,48 @@ router.get("/tracks/:id", asyncHandler(async (req, res) => {
   const row = await db.prepare(`${TRACK_SELECT} WHERE tracks.id = ?`).get(req.params.id);
   if (!row) return res.status(404).json({ error: "Track not found" });
   res.json({ track: serialize.track(row) });
+}));
+
+router.get("/tracks/:id/audio", asyncHandler(async (req, res) => {
+  const row = await db
+    .prepare("SELECT content_type, audio_data FROM track_audio WHERE track_id = ?")
+    .get(req.params.id);
+  if (!row) return res.status(404).json({ error: "Uploaded audio not found" });
+
+  const audio = Buffer.from(row.audio_data);
+  const size = audio.length;
+  const headers = {
+    "Accept-Ranges": "bytes",
+    "Cache-Control": "public, max-age=31536000, immutable",
+    "Content-Type": row.content_type,
+    "X-Content-Type-Options": "nosniff",
+  };
+  const range = req.get("Range");
+  if (!range) {
+    res.set({ ...headers, "Content-Length": String(size) });
+    return res.send(audio);
+  }
+
+  const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+  if (!match || (!match[1] && !match[2])) {
+    res.set({ ...headers, "Content-Range": `bytes */${size}` });
+    return res.status(416).end();
+  }
+
+  const suffixLength = Number(match[2]);
+  const start = match[1] ? Number(match[1]) : Math.max(0, size - suffixLength);
+  const end = match[1] && match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= size) {
+    res.set({ ...headers, "Content-Range": `bytes */${size}` });
+    return res.status(416).end();
+  }
+
+  res.set({
+    ...headers,
+    "Content-Length": String(end - start + 1),
+    "Content-Range": `bytes ${start}-${end}/${size}`,
+  });
+  return res.status(206).send(audio.subarray(start, end + 1));
 }));
 
 router.get("/search", asyncHandler(async (req, res) => {
@@ -133,11 +198,46 @@ router.get("/youtube/search", asyncHandler(async (req, res) => {
   res.status(404).json({ error: "No matching video found" });
 }));
 
-// Upload local audio file (MP3/WAV)
+// Uploaded audio is stored in the database so it persists on serverless deployments.
 router.post("/tracks/upload", requireAuth, asyncHandler(async (req, res) => {
-  const { title, artistName, albumTitle, fileName, base64Data, duration, playlistId } = req.body || {};
-  if (!title || !title.trim()) return res.status(400).json({ error: "Song title is required" });
-  if (!base64Data) return res.status(400).json({ error: "Audio file data is required" });
+  const {
+    title,
+    artistName,
+    albumTitle,
+    fileName,
+    contentType: requestedContentType,
+    base64Data,
+    duration,
+    playlistId,
+  } = req.body || {};
+  if (typeof title !== "string" || !title.trim()) {
+    return res.status(400).json({ error: "Song title is required" });
+  }
+  if (typeof base64Data !== "string" || !base64Data) {
+    return res.status(400).json({ error: "Audio file data is required" });
+  }
+  const normalizedContentType = typeof requestedContentType === "string"
+    ? requestedContentType.split(";")[0].trim().toLowerCase()
+    : "";
+  const extension = typeof fileName === "string" ? fileName.split(".").pop().toLowerCase() : "";
+  const contentType = AUDIO_TYPES.has(normalizedContentType)
+    ? normalizedContentType
+    : Object.prototype.hasOwnProperty.call(AUDIO_TYPE_BY_EXTENSION, extension)
+      ? AUDIO_TYPE_BY_EXTENSION[extension]
+      : null;
+  if (!contentType) {
+    return res.status(415).json({ error: "Choose an MP3, WAV, M4A, FLAC, AAC, OGG, OPUS, or WEBM audio file" });
+  }
+  if (base64Data.length > Math.ceil(MAX_AUDIO_UPLOAD_BYTES / 3) * 4) {
+    return res.status(413).json({ error: "Audio files must be 3 MB or smaller" });
+  }
+  const audioData = Buffer.from(base64Data, "base64");
+  if (!audioData.length || audioData.toString("base64") !== base64Data) {
+    return res.status(400).json({ error: "The audio file data is invalid" });
+  }
+  if (audioData.length > MAX_AUDIO_UPLOAD_BYTES) {
+    return res.status(413).json({ error: "Audio files must be 3 MB or smaller" });
+  }
   if (playlistId) {
     const playlist = await db
       .prepare("SELECT id FROM playlists WHERE id = ? AND (user_id = ? OR is_default = 1)")
@@ -145,39 +245,38 @@ router.post("/tracks/upload", requireAuth, asyncHandler(async (req, res) => {
     if (!playlist) return res.status(403).json({ error: "You don't have permission to add songs to this playlist" });
   }
 
-  try {
-    const cleanFileName = `${Date.now()}-${(fileName || "track.mp3").replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-    const filePath = path.join(__dirname, "../audio", cleanFileName);
-    const buffer = Buffer.from(base64Data, "base64");
-    fs.writeFileSync(filePath, buffer);
-
-    const audioUrl = `/audio/${cleanFileName}`;
-
-    let artist = await db
+  const cleanArtistName = typeof artistName === "string" && artistName.trim()
+    ? artistName.trim()
+    : "Local Artist";
+  const cleanAlbumTitle = typeof albumTitle === "string" && albumTitle.trim()
+    ? albumTitle.trim()
+    : "Local Library";
+  const trackId = await db.transaction(async (connection) => {
+    let artist = await connection
       .prepare("SELECT * FROM artists WHERE LOWER(name) = LOWER(?)")
-      .get((artistName || "Local Artist").trim());
+      .get(cleanArtistName);
     if (!artist) {
-      const aRes = await db
+      const aRes = await connection
         .prepare("INSERT INTO artists (name, bio) VALUES (?, ?)")
-        .run((artistName || "Local Artist").trim(), "Uploaded music");
-      artist = await db.prepare("SELECT * FROM artists WHERE id = ?").get(aRes.lastInsertRowid);
+        .run(cleanArtistName, "Uploaded music");
+      artist = await connection.prepare("SELECT * FROM artists WHERE id = ?").get(aRes.lastInsertRowid);
     }
 
-    let album = await db
+    let album = await connection
       .prepare("SELECT * FROM albums WHERE LOWER(title) = LOWER(?) AND artist_id = ?")
-      .get((albumTitle || "Local Library").trim(), artist.id);
+      .get(cleanAlbumTitle, artist.id);
     if (!album) {
-      const albRes = await db
+      const albRes = await connection
         .prepare("INSERT INTO albums (title, artist_id, cover_url) VALUES (?, ?, ?)")
-        .run((albumTitle || "Local Library").trim(), artist.id, "/covers/afterglow.png");
-      album = await db.prepare("SELECT * FROM albums WHERE id = ?").get(albRes.lastInsertRowid);
+        .run(cleanAlbumTitle, artist.id, "/covers/afterglow.png");
+      album = await connection.prepare("SELECT * FROM albums WHERE id = ?").get(albRes.lastInsertRowid);
     }
 
-    const tRes = await db
+    const tRes = await connection
       .prepare(
         `
       INSERT INTO tracks (title, artist_id, album_id, duration, audio_url, cover_url, is_downloadable, release_date)
-      VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+      VALUES (?, ?, ?, ?, NULL, ?, 1, ?)
     `
       )
       .run(
@@ -185,28 +284,32 @@ router.post("/tracks/upload", requireAuth, asyncHandler(async (req, res) => {
         artist.id,
         album.id,
         Number(duration) || 180,
-        audioUrl,
         "/covers/afterglow.png",
         new Date().toISOString().slice(0, 10)
       );
 
-    const trackId = tRes.lastInsertRowid;
+    const newTrackId = tRes.lastInsertRowid;
+    await connection.prepare("INSERT INTO track_audio (track_id, content_type, audio_data) VALUES (?, ?, ?)")
+      .run(newTrackId, contentType, audioData);
+    await connection.prepare("UPDATE tracks SET audio_url = ? WHERE id = ?")
+      .run(`/api/tracks/${newTrackId}/audio`, newTrackId);
+
     if (playlistId) {
-      const { maxOrder } = await db
+      const { maxOrder } = await connection
         .prepare('SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM playlist_tracks WHERE playlist_id = ?')
         .get(playlistId);
-      await db.prepare("INSERT IGNORE INTO playlist_tracks (playlist_id, track_id, sort_order) VALUES (?, ?, ?)").run(
+      await connection.prepare("INSERT IGNORE INTO playlist_tracks (playlist_id, track_id, sort_order) VALUES (?, ?, ?)").run(
         playlistId,
-        trackId,
+        newTrackId,
         maxOrder + 1
       );
     }
 
-    const fullTrack = await db.prepare(`${TRACK_SELECT} WHERE tracks.id = ?`).get(trackId);
-    res.status(201).json({ track: serialize.track(fullTrack), message: "Track uploaded successfully!" });
-  } catch (err) {
-    res.status(500).json({ error: err.message || "Failed to save audio file" });
-  }
+    return newTrackId;
+  });
+
+  const fullTrack = await db.prepare(`${TRACK_SELECT} WHERE tracks.id = ?`).get(trackId);
+  res.status(201).json({ track: serialize.track(fullTrack), message: "Track uploaded successfully!" });
 }));
 
 // Delete a track

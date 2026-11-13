@@ -126,6 +126,8 @@ account does not own or collaborate on cannot be fetched past that limit.
   Tonight's Rotation cards
 - Playlists: create, view, add/remove tracks, update cover art, public/private;
   shared default playlists can be managed by any signed-in user
+- Device uploads: upload MP3, WAV, M4A, FLAC, AAC, OGG, OPUS, or WEBM files up
+  to 3 MB; audio is stored persistently with the track record
 - Spotify imports: public previews plus authorized, paginated playlist imports
   (up to 200 items)
 - Offline playback: save MusicFlow-hosted audio from an album's actions menu;
@@ -162,8 +164,8 @@ database/
 
 Roughly in order of what unlocks the most:
 
-1. **Real storage**: put uploaded audio/cover files in S3 (or similar), generate
-   signed URLs in the track/album serializers instead of static `/audio/...` paths.
+1. **Media scaling**: move database-backed audio and uploaded cover storage to S3
+   (or similar) as the catalog grows, then generate signed URLs in the serializers.
 2. **Search**: stand up Meilisearch, index tracks/albums/artists on write,
    swap the `/api/search` handler to query it instead of `LIKE`.
 3. **Admin panel**: a protected `/admin` area (check `role === 'admin'` in

@@ -126,7 +126,9 @@ export default function Sidebar() {
         </div>
       )}
 
-      {showImportModal && <ImportSpotifyModal onClose={() => setShowImportModal(false)} />}
+      {showImportModal && (
+        <ImportSpotifyModal initialTab="upload" onClose={() => setShowImportModal(false)} />
+      )}
 
       {/* User Bottom Card */}
       <div className="mt-auto border-t p-4" style={{ borderTopColor: "var(--color-line)" }}>

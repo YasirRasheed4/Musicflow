@@ -49,6 +49,11 @@ if (process.env.DB_CLIENT === "sqlite") {
       is_explicit INTEGER NOT NULL DEFAULT 0,
       release_date TEXT
     );
+    CREATE TABLE IF NOT EXISTS track_audio (
+      track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+      content_type TEXT NOT NULL,
+      audio_data BLOB NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS playlists (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL REFERENCES users(id),
@@ -318,6 +323,11 @@ if (process.env.DB_CLIENT === "sqlite") {
           is_downloadable INTEGER NOT NULL DEFAULT 0,
           is_explicit INTEGER NOT NULL DEFAULT 0,
           release_date DATE
+        );
+        CREATE TABLE IF NOT EXISTS track_audio (
+          track_id INTEGER PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+          content_type TEXT NOT NULL,
+          audio_data BYTEA NOT NULL
         );
         CREATE TABLE IF NOT EXISTS playlists (
           id SERIAL PRIMARY KEY,

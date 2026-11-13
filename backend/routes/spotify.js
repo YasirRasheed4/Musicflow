@@ -3,6 +3,7 @@ const db = require("../db");
 const serialize = require("../serialize");
 const { requireAuth } = require("../middleware/auth");
 const { resolveSpotify } = require("../services/spotify");
+const { findOrCreateSpotifyTrack } = require("../services/spotifyTracks");
 const asyncHandler = require("../middleware/asyncHandler");
 
 const router = Router();
@@ -52,50 +53,6 @@ async function findOrCreateAlbum(connection, title, artistId, coverUrl, releaseD
   return album;
 }
 
-async function findOrCreateTrack(connection, {
-  title,
-  artistId,
-  albumId,
-  duration,
-  audioUrl,
-  coverUrl,
-  isExplicit,
-  releaseDate,
-  preferAlbum = false,
-}) {
-  const cleanTitle = (title || "Untitled Track").trim();
-  let track = await connection
-    .prepare("SELECT * FROM tracks WHERE LOWER(title) = LOWER(?) AND artist_id = ?")
-    .get(cleanTitle, artistId);
-
-  if (!track) {
-    const result = await connection
-      .prepare(`
-        INSERT INTO tracks
-          (title, artist_id, album_id, duration, audio_url, cover_url, genre_tags, mood_tags, is_downloadable, is_explicit, release_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .run(
-        cleanTitle,
-        artistId,
-        albumId,
-        duration || 180,
-        audioUrl,
-        coverUrl,
-        JSON.stringify(["spotify"]),
-        JSON.stringify(["imported"]),
-        1,
-        isExplicit ? 1 : 0,
-        releaseDate || new Date().toISOString().slice(0, 10)
-      );
-    track = await connection.prepare("SELECT * FROM tracks WHERE id = ?").get(result.lastInsertRowid);
-  } else if (preferAlbum && track.album_id !== albumId) {
-    await connection.prepare("UPDATE tracks SET album_id = ? WHERE id = ?").run(albumId, track.id);
-    track = await connection.prepare("SELECT * FROM tracks WHERE id = ?").get(track.id);
-  }
-  return track;
-}
-
 // Preview a Spotify playlist, album, or track before importing
 router.post("/preview", asyncHandler(async (req, res) => {
   const { url } = req.body || {};
@@ -139,6 +96,7 @@ router.post("/import-playlist", requireAuth, asyncHandler(async (req, res) => {
       const insertPlaylistTrack = connection.prepare(
         "INSERT IGNORE INTO playlist_tracks (playlist_id, track_id, sort_order) VALUES (?, ?, ?)"
       );
+      const trackOccurrences = new Map();
       for (const [i, t] of spotifyData.tracks.entries()) {
         const artist = await findOrCreateArtist(connection, t.artistName);
         const albumArtist = await findOrCreateArtist(
@@ -152,7 +110,14 @@ router.post("/import-playlist", requireAuth, asyncHandler(async (req, res) => {
           t.coverUrl,
           t.releaseDate
         );
-        const track = await findOrCreateTrack(connection, {
+        const occurrenceKey = JSON.stringify([
+          album.id,
+          artist.id,
+          String(t.title || "Untitled Track").trim().toLowerCase(),
+        ]);
+        const occurrenceIndex = trackOccurrences.get(occurrenceKey) || 0;
+        trackOccurrences.set(occurrenceKey, occurrenceIndex + 1);
+        const track = await findOrCreateSpotifyTrack(connection, {
           title: t.title,
           artistId: artist.id,
           albumId: album.id,
@@ -161,8 +126,7 @@ router.post("/import-playlist", requireAuth, asyncHandler(async (req, res) => {
           coverUrl: t.coverUrl,
           isExplicit: t.isExplicit,
           releaseDate: t.releaseDate,
-          preferAlbum: spotifyData.type === "album",
-        });
+        }, occurrenceIndex);
         await insertPlaylistTrack.run(id, track.id, i);
       }
       return id;
@@ -205,16 +169,15 @@ router.post("/import-track", requireAuth, asyncHandler(async (req, res) => {
         spotifyData.coverUrl,
         spotifyData.releaseDate
       );
-      const createdTrack = await findOrCreateTrack(connection, {
-      title: spotifyData.title,
-      artistId: artist.id,
-      albumId: album.id,
-      duration: spotifyData.duration,
-      audioUrl: spotifyData.audioUrl,
-      coverUrl: spotifyData.coverUrl,
-      isExplicit: spotifyData.isExplicit,
-      releaseDate: spotifyData.releaseDate,
-      preferAlbum: true,
+      const createdTrack = await findOrCreateSpotifyTrack(connection, {
+        title: spotifyData.title,
+        artistId: artist.id,
+        albumId: album.id,
+        duration: spotifyData.duration,
+        audioUrl: spotifyData.audioUrl,
+        coverUrl: spotifyData.coverUrl,
+        isExplicit: spotifyData.isExplicit,
+        releaseDate: spotifyData.releaseDate,
       });
 
       if (playlistId) {
@@ -226,7 +189,7 @@ router.post("/import-track", requireAuth, asyncHandler(async (req, res) => {
             .prepare('SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM playlist_tracks WHERE playlist_id = ?')
             .get(playlistId);
           await connection.prepare(
-          "INSERT IGNORE INTO playlist_tracks (playlist_id, track_id, sort_order) VALUES (?, ?, ?)"
+            "INSERT IGNORE INTO playlist_tracks (playlist_id, track_id, sort_order) VALUES (?, ?, ?)"
           ).run(playlistId, createdTrack.id, maxOrder + 1);
         }
       }
@@ -259,14 +222,14 @@ router.post("/custom-track", requireAuth, asyncHandler(async (req, res) => {
         artist.id,
         coverUrl || "/covers/neon-tide.png"
       );
-      const createdTrack = await findOrCreateTrack(connection, {
-      title: title.trim(),
-      artistId: artist.id,
-      albumId: album.id,
-      duration: Number(duration) || 180,
-      audioUrl: (audioUrl && audioUrl.trim()) || "/audio/neon-tide.wav",
-      coverUrl: (coverUrl && coverUrl.trim()) || "/covers/neon-tide.png",
-      isExplicit: false,
+      const createdTrack = await findOrCreateSpotifyTrack(connection, {
+        title: title.trim(),
+        artistId: artist.id,
+        albumId: album.id,
+        duration: Number(duration) || 180,
+        audioUrl: (audioUrl && audioUrl.trim()) || "/audio/neon-tide.wav",
+        coverUrl: (coverUrl && coverUrl.trim()) || "/covers/neon-tide.png",
+        isExplicit: false,
       });
 
       if (playlistId) {
@@ -278,7 +241,7 @@ router.post("/custom-track", requireAuth, asyncHandler(async (req, res) => {
             .prepare('SELECT COALESCE(MAX(sort_order), -1) AS "maxOrder" FROM playlist_tracks WHERE playlist_id = ?')
             .get(playlistId);
           await connection.prepare(
-          "INSERT IGNORE INTO playlist_tracks (playlist_id, track_id, sort_order) VALUES (?, ?, ?)"
+            "INSERT IGNORE INTO playlist_tracks (playlist_id, track_id, sort_order) VALUES (?, ?, ?)"
           ).run(playlistId, createdTrack.id, maxOrder + 1);
         }
       }
