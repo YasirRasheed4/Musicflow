@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import JSZip from "jszip";
-import { Play, Plus, Trash2, Download } from "lucide-react";
+import { Pencil, Play, Plus, Trash2, Download } from "lucide-react";
 import TrackRow from "../components/TrackRow";
 import AddToPlaylistModal from "../components/AddToPlaylistModal";
 import ImportSpotifyModal from "../components/ImportSpotifyModal";
@@ -15,7 +15,7 @@ export default function PlaylistDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { deletePlaylist } = usePlaylists();
+  const { renamePlaylist, deletePlaylist } = usePlaylists();
   const [playlist, setPlaylist] = useState(null);
   const [tracks, setTracks] = useState([]);
   const [error, setError] = useState("");
@@ -67,6 +67,17 @@ export default function PlaylistDetail() {
     } catch (err) {
       setError(err.message || "Failed to delete playlist");
       setDeleting(false);
+    }
+  };
+
+  const handleRename = async () => {
+    const name = window.prompt("Enter a new playlist name", playlist.name);
+    if (name === null || !name.trim()) return;
+    try {
+      const updatedPlaylist = await renamePlaylist(playlist.id, name);
+      setPlaylist((previous) => ({ ...previous, ...updatedPlaylist }));
+    } catch (err) {
+      setError(err.message || "Failed to rename playlist");
     }
   };
 
@@ -160,6 +171,12 @@ export default function PlaylistDetail() {
             )}
             {isOwner && (
               <>
+                <button
+                  onClick={handleRename}
+                  className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink hover:bg-line transition"
+                >
+                  <Pencil size={16} /> Rename Playlist
+                </button>
                 <button
                   onClick={() => setShowAddModal(true)}
                   className="flex items-center gap-2 rounded-full bg-surface2 px-4 py-2 text-sm font-semibold text-ink hover:bg-line transition"

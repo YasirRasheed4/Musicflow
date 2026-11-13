@@ -5,6 +5,7 @@ import AddToPlaylistModal from "../components/AddToPlaylistModal";
 import { api } from "../api";
 import { usePlayer } from "../context/PlayerContext";
 import { useAuth } from "../context/AuthContext";
+import { usePlaylists } from "../context/PlaylistsContext";
 
 export default function Home() {
   const [playlists, setPlaylists] = useState([]);
@@ -14,6 +15,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const { playTrack } = usePlayer();
   const { user } = useAuth();
+  const { renamePlaylist } = usePlaylists();
 
   useEffect(() => {
     api.get("/playlists/public").then(async (res) => {
@@ -40,6 +42,19 @@ export default function Home() {
       setTracks((previous) => previous.filter((track) => track.albumId !== album.id));
     } catch (err) {
       setError(err.message || "Failed to delete album");
+    }
+  };
+
+  const handleRenamePlaylist = async (playlist) => {
+    const name = window.prompt("Enter a new playlist name", playlist.name);
+    if (name === null || !name.trim()) return;
+    try {
+      const updatedPlaylist = await renamePlaylist(playlist.id, name);
+      setPlaylists((previous) => previous.map((item) =>
+        item.id === playlist.id ? { ...item, ...updatedPlaylist } : item
+      ));
+    } catch (err) {
+      setError(err.message || "Failed to rename playlist");
     }
   };
 
@@ -87,6 +102,7 @@ export default function Home() {
                 title={p.name}
                 subtitle={p.description}
                 onPlay={() => p.tracks.length && playTrack(p.tracks[0], p.tracks)}
+                onRename={user && user.id === p.userId ? () => handleRenamePlaylist(p) : undefined}
               />
             ))}
           </div>

@@ -12,7 +12,7 @@ import { api } from "../api";
 
 export default function Library() {
   const { user } = useAuth();
-  const { playlists, createPlaylist, deletePlaylist } = usePlaylists();
+  const { playlists, createPlaylist, renamePlaylist, deletePlaylist } = usePlaylists();
   const { toggleFavorite } = useFavorites();
   const [tab, setTab] = useState("playlists");
   const [favorites, setFavorites] = useState([]);
@@ -30,6 +30,16 @@ export default function Library() {
   const handleDeletePlaylist = async (p) => {
     if (window.confirm(`Are you sure you want to delete the playlist "${p.name}"?`)) {
       await deletePlaylist(p.id);
+    }
+  };
+
+  const handleRenamePlaylist = async (playlist) => {
+    const name = window.prompt("Enter a new playlist name", playlist.name);
+    if (name === null || !name.trim()) return;
+    try {
+      await renamePlaylist(playlist.id, name);
+    } catch (err) {
+      setError(err.message || "Failed to rename playlist");
     }
   };
 
@@ -136,6 +146,7 @@ export default function Library() {
                   title={p.name}
                   subtitle={p.trackCount !== undefined ? `${p.trackCount} songs · ${p.isPublic ? "Public" : "Private"}` : (p.isPublic ? "Public" : "Private")}
                   onDelete={() => handleDeletePlaylist(p)}
+                  onRename={() => handleRenamePlaylist(p)}
                 />
               ))}
             </div>
