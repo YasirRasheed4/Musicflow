@@ -4,4 +4,6 @@ node_modules/
 *.db-wal
 dist/
 .env
+*.env.local
+*.local
 .DS_Store

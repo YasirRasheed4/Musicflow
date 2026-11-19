@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { api, getToken, setToken } from "../api";
 import { disconnectSpotify } from "../spotifyAuth";
+import { supabase } from "../lib/supabase";
 
 const AuthContext = createContext(null);
 
@@ -9,18 +10,76 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!getToken()) {
-      setLoading(false);
-      return;
+    let active = true;
+
+    async function loadUser() {
+      if (supabase) {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          if (active) setUser(null);
+        } else if (data.session) {
+          try {
+            const res = await api.get("/auth/me");
+            if (active) setUser(res.user);
+          } catch {
+            await supabase.auth.signOut();
+            if (active) setUser(null);
+          }
+        } else if (getToken()) {
+          try {
+            const res = await api.get("/auth/me");
+            if (active) setUser(res.user);
+          } catch {
+            setToken(null);
+          }
+        }
+        if (active) setLoading(false);
+        return;
+      }
+
+      if (!getToken()) {
+        if (active) setLoading(false);
+        return;
+      }
+      try {
+        const res = await api.get("/auth/me");
+        if (active) setUser(res.user);
+      } catch {
+        setToken(null);
+      } finally {
+        if (active) setLoading(false);
+      }
     }
-    api
-      .get("/auth/me")
-      .then((res) => setUser(res.user))
-      .catch(() => setToken(null))
-      .finally(() => setLoading(false));
+
+    const subscription = supabase?.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT" && active) {
+        setUser(null);
+        setLoading(false);
+      }
+    }).data.subscription;
+
+    loadUser();
+
+    return () => {
+      active = false;
+      subscription?.unsubscribe();
+    };
   }, []);
 
   const login = useCallback(async (email, password) => {
+    if (supabase) {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw new Error(error.message);
+      try {
+        const res = await api.get("/auth/me");
+        setUser(res.user);
+        return res.user;
+      } catch (error) {
+        await supabase.auth.signOut();
+        throw error;
+      }
+    }
+
     const res = await api.post("/auth/login", { email, password });
     setToken(res.token);
     setUser(res.user);
@@ -28,13 +87,29 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signup = useCallback(async (name, email, password) => {
+    if (supabase) {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { name } },
+      });
+      if (error) throw new Error(error.message);
+      if (!data.session) {
+        throw new Error("Account created. Check your email to confirm it, then sign in.");
+      }
+      const res = await api.get("/auth/me");
+      setUser(res.user);
+      return res.user;
+    }
+
     const res = await api.post("/auth/signup", { name, email, password });
     setToken(res.token);
     setUser(res.user);
     return res.user;
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    if (supabase) await supabase.auth.signOut();
     setToken(null);
     disconnectSpotify();
     setUser(null);

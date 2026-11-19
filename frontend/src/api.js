@@ -1,3 +1,5 @@
+import { supabase } from "./lib/supabase";
+
 const TOKEN_KEY = "musicflow_token";
 const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
@@ -10,8 +12,16 @@ export function setToken(token) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
+async function getAuthToken() {
+  if (supabase) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.access_token) return data.session.access_token;
+  }
+  return getToken();
+}
+
 async function request(path, options = {}) {
-  const token = getToken();
+  const token = await getAuthToken();
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
   if (token) headers.Authorization = `Bearer ${token}`;
 
