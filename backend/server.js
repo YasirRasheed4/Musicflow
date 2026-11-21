@@ -6,6 +6,7 @@ const cors = require("cors");
 const db = require("./db");
 const seedData = require("./seed");
 const asyncHandler = require("./middleware/asyncHandler");
+const { isSupabaseConfigured } = require("./middleware/auth");
 
 const authRoutes = require("./routes/auth");
 const trackRoutes = require("./routes/tracks");
@@ -35,7 +36,10 @@ app.use(asyncHandler(async (_req, _res, next) => {
 app.use("/audio", express.static(path.join(__dirname, "audio")));
 app.use("/covers", express.static(path.join(__dirname, "covers")));
 
-app.get("/api/health", (req, res) => res.json({ ok: true }));
+app.get("/api/health", (_req, res) => res.json({
+  ok: true,
+  supabaseAuthConfigured: isSupabaseConfigured(),
+}));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/favorites", favoritesRoutes);

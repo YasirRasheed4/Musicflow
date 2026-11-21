@@ -46,7 +46,11 @@ async function getLocalUserForSupabaseToken(token) {
   if (!supabase) return null;
 
   const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user?.email) return null;
+  if (error) {
+    console.error("Supabase token validation failed:", error.message);
+    return null;
+  }
+  if (!data.user?.email) return null;
 
   const authUser = data.user;
   const email = authUser.email;
@@ -128,4 +132,8 @@ async function optionalAuth(req, _res, next) {
   next();
 }
 
-module.exports = { signToken, requireAuth, optionalAuth, JWT_SECRET };
+function isSupabaseConfigured() {
+  return Boolean(supabase);
+}
+
+module.exports = { signToken, requireAuth, optionalAuth, isSupabaseConfigured, JWT_SECRET };
