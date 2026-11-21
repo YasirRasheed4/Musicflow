@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm --prefix backend start\" \"npm --prefix frontend run dev\"",
+    "test": "npm test --prefix backend",
     "seed": "npm --prefix backend run seed",
     "server": "npm --prefix backend start",
     "client": "npm --prefix frontend run dev"

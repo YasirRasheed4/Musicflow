@@ -26,9 +26,9 @@ export default function TopBar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     stopPlayback();
-    logout();
+    await logout();
     setDropdownOpen(false);
     navigate("/login");
   };

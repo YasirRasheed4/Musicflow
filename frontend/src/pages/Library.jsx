@@ -9,6 +9,7 @@ import Card from "../components/Card";
 import AddToPlaylistModal from "../components/AddToPlaylistModal";
 import ImportSpotifyModal from "../components/ImportSpotifyModal";
 import { api } from "../api";
+import { getSavedOfflineTracks } from "../offline";
 
 export default function Library() {
   const { user } = useAuth();
@@ -16,6 +17,7 @@ export default function Library() {
   const { toggleFavorite } = useFavorites();
   const [tab, setTab] = useState("playlists");
   const [favorites, setFavorites] = useState([]);
+  const [offlineTracks, setOfflineTracks] = useState([]);
   const [newName, setNewName] = useState("");
   const [addTrack, setAddTrack] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -26,6 +28,13 @@ export default function Library() {
       api.get("/favorites").then((res) => setFavorites(res.tracks));
     }
   }, [user, tab]);
+
+  useEffect(() => {
+    const loadOfflineTracks = () => setOfflineTracks(getSavedOfflineTracks());
+    loadOfflineTracks();
+    window.addEventListener("musicflow-offline-tracks-changed", loadOfflineTracks);
+    return () => window.removeEventListener("musicflow-offline-tracks-changed", loadOfflineTracks);
+  }, []);
 
   const handleDeletePlaylist = async (p) => {
     if (window.confirm(`Are you sure you want to delete the playlist "${p.name}"?`)) {
@@ -95,7 +104,7 @@ export default function Library() {
       </div>
 
       <div className="flex gap-2">
-        {["playlists", "favorites"].map((t) => (
+        {["playlists", "favorites", "offline"].map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -168,6 +177,24 @@ export default function Library() {
                 onAddToPlaylist={setAddTrack}
                 onRemove={() => handleRemoveFavorite(t)}
                 onDelete={handleDeleteTrack}
+              />
+            ))
+          )}
+        </div>
+      )}
+
+      {tab === "offline" && (
+        <div className="flex flex-col">
+          {offlineTracks.length === 0 ? (
+            <p className="text-muted">Save a song with the download icon to make it available offline.</p>
+          ) : (
+            offlineTracks.map((t, i) => (
+              <TrackRow
+                key={t.id}
+                track={t}
+                index={i + 1}
+                queue={offlineTracks}
+                onAddToPlaylist={setAddTrack}
               />
             ))
           )}

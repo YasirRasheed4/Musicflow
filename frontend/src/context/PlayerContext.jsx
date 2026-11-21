@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { api } from "../api";
 import { Equalizer } from "../utils/equalizer";
+import { getOfflineAudioUrl } from "../offline";
 import { useAuth } from "./AuthContext";
 
 const PlayerContext = createContext(null);
@@ -19,6 +20,7 @@ export function PlayerProvider({ children }) {
   const currentPlaybackTrackIdRef = useRef(null);
   const reportedPlaybackSessionRef = useRef(0);
   const youtubeVideoIdsRef = useRef(new Map());
+  const offlineObjectUrlRef = useRef(null);
 
   const [queue, setQueue] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
@@ -143,20 +145,45 @@ export function PlayerProvider({ children }) {
       playbackSessionRef.current += 1;
       currentPlaybackTrackIdRef.current = track.id;
       const playbackSession = playbackSessionRef.current;
+      if (offlineObjectUrlRef.current) {
+        URL.revokeObjectURL(offlineObjectUrlRef.current);
+        offlineObjectUrlRef.current = null;
+      }
+      audio?.pause();
+      if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === "function") {
+        try {
+          ytPlayerRef.current.pauseVideo();
+        } catch (e) {}
+      }
       setCurrentIndex(index);
       indexRef.current = index;
       setProgress(0);
       setDuration(track.duration || 180);
 
-      const isLocalAudio =
-        track.audioUrl &&
-        (track.audioUrl.startsWith("/audio/") ||
-          /^\/api\/tracks\/\d+\/audio$/.test(track.audioUrl) ||
-          track.audioUrl.endsWith(".wav") ||
-          track.audioUrl.endsWith(".mp3") ||
-          track.audioUrl.startsWith("blob:"));
+      let playbackAudioUrl = track.audioUrl;
+      if (!navigator.onLine) {
+        try {
+          const offlineAudioUrl = await getOfflineAudioUrl(track);
+          if (offlineAudioUrl) {
+            if (offlineObjectUrlRef.current) URL.revokeObjectURL(offlineObjectUrlRef.current);
+            offlineObjectUrlRef.current = offlineAudioUrl;
+            playbackAudioUrl = offlineAudioUrl;
+          }
+        } catch (error) {
+          console.error("Could not load the offline audio copy:", error);
+        }
+        if (playbackSessionRef.current !== playbackSession) return;
+      }
 
-      if (isLocalAudio && !track.audioUrl.startsWith("youtube:")) {
+      const isLocalAudio =
+        playbackAudioUrl &&
+        (playbackAudioUrl.startsWith("/audio/") ||
+          /^\/api\/tracks\/\d+\/audio$/.test(playbackAudioUrl) ||
+          playbackAudioUrl.endsWith(".wav") ||
+          playbackAudioUrl.endsWith(".mp3") ||
+          playbackAudioUrl.startsWith("blob:"));
+
+      if (isLocalAudio && !playbackAudioUrl.startsWith("youtube:")) {
         // Mode: HTML5 Audio
         modeRef.current = "audio";
         if (ytPlayerRef.current && typeof ytPlayerRef.current.pauseVideo === "function") {
@@ -165,7 +192,7 @@ export function PlayerProvider({ children }) {
           } catch (e) {}
         }
         if (audio) {
-          audio.src = track.audioUrl;
+          audio.src = playbackAudioUrl;
           audio.currentTime = 0;
           audio.play().then(() => recordPlayback(playbackSession, track.id)).catch(() => {});
         }
@@ -184,6 +211,7 @@ export function PlayerProvider({ children }) {
           setLoadingAudio(true);
           try {
             const res = await api.get(`/tracks/${track.id}/youtube`);
+            if (playbackSessionRef.current !== playbackSession) return;
             if (res.videoId) {
               videoId = res.videoId;
               youtubeVideoIdsRef.current.set(track.id, videoId);
@@ -195,10 +223,11 @@ export function PlayerProvider({ children }) {
           } catch (err) {
             console.error("Failed to resolve track YouTube audio:", err);
           } finally {
-            setLoadingAudio(false);
+            if (playbackSessionRef.current === playbackSession) setLoadingAudio(false);
           }
         }
 
+        if (playbackSessionRef.current !== playbackSession) return;
         if (videoId && ytPlayerRef.current && typeof ytPlayerRef.current.loadVideoById === "function") {
           try {
             ytPlayerRef.current.loadVideoById(videoId);
@@ -207,10 +236,10 @@ export function PlayerProvider({ children }) {
           } catch (e) {
             console.error("YouTube play error:", e);
           }
-        } else if (audio && track.audioUrl && !track.audioUrl.startsWith("youtube:")) {
+        } else if (audio && playbackAudioUrl && !playbackAudioUrl.startsWith("youtube:")) {
           // Fallback to preview audio if YouTube player not yet ready
           modeRef.current = "audio";
-          audio.src = track.audioUrl;
+          audio.src = playbackAudioUrl;
           audio.currentTime = 0;
           audio.play().then(() => recordPlayback(playbackSession, track.id)).catch(() => {});
         }
@@ -257,6 +286,10 @@ export function PlayerProvider({ children }) {
 
     return () => {
       audio.pause();
+      if (offlineObjectUrlRef.current) {
+        URL.revokeObjectURL(offlineObjectUrlRef.current);
+        offlineObjectUrlRef.current = null;
+      }
       audio.removeEventListener("timeupdate", onTime);
       audio.removeEventListener("loadedmetadata", onMeta);
       audio.removeEventListener("ended", onEnded);
@@ -412,10 +445,15 @@ export function PlayerProvider({ children }) {
   }, []);
 
   const stopPlayback = useCallback(() => {
+    playbackSessionRef.current += 1;
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
       audioRef.current.src = "";
+    }
+    if (offlineObjectUrlRef.current) {
+      URL.revokeObjectURL(offlineObjectUrlRef.current);
+      offlineObjectUrlRef.current = null;
     }
     if (ytPlayerRef.current && typeof ytPlayerRef.current.stopVideo === "function") {
       try {

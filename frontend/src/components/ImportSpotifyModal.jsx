@@ -514,7 +514,7 @@ export default function ImportSpotifyModal({
                   Spotify Playlist / Track Link
                 </label>
                 <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
-                  Full Songs Enabled
+                  Spotify previews
                 </span>
               </div>
               <div className="flex gap-2">
@@ -649,7 +649,7 @@ export default function ImportSpotifyModal({
                   ) : (
                     <>
                       <Plus size={18} />
-                      Import to My Library (Full Audio)
+                      Import to My Library
                     </>
                   )}
                 </button>

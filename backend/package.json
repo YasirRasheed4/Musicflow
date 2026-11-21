@@ -4,6 +4,7 @@
   "private": true,
   "main": "server.js",
   "scripts": {
+    "test": "node --test serialize.test.js routes/tracks.test.js services/spotifyTracks.test.js",
     "seed": "node seed.js",
     "start": "node server.js"
   },

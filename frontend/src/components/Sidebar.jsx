@@ -23,9 +23,9 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const [showImportModal, setShowImportModal] = useState(false);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     stopPlayback();
-    logout();
+    await logout();
     navigate("/login");
   };
 

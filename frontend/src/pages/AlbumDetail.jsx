@@ -244,7 +244,8 @@ export default function AlbumDetail() {
           )}
           {tracks.some((track) => track.genreTags?.includes("spotify")) && (
             <p role="status" className="mt-2 text-sm text-muted">
-              Spotify provides previews only here. Full-track downloads aren&apos;t available; use Spotify&apos;s official offline playback or upload audio you own.
+              Spotify tracks can save their available 30-second preview for offline playback. Full-track downloads
+              aren&apos;t available here; use Spotify&apos;s official app for full offline listening.
             </p>
           )}
           {tracks.length > 0 && offlineStatus.availableCount === 0 && !offlineNotice && (

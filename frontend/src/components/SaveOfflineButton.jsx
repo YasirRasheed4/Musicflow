@@ -5,6 +5,7 @@ import {
   isTrackSavedOffline,
   removeTrackOffline,
   saveTrackOffline,
+  isSpotifyPreviewTrack,
 } from "../offline";
 
 export default function SaveOfflineButton({ track }) {
@@ -27,6 +28,10 @@ export default function SaveOfflineButton({ track }) {
   }, [track]);
 
   if (!canSaveTrackOffline(track)) return null;
+
+  const offlineLabel = isSpotifyPreviewTrack(track)
+    ? "Spotify preview (30 seconds)"
+    : "offline copy";
 
   const handleClick = async () => {
     setSaving(true);
@@ -52,8 +57,8 @@ export default function SaveOfflineButton({ track }) {
         onClick={handleClick}
         disabled={saving}
         className="flex h-8 w-8 items-center justify-center text-muted hover:text-accent disabled:opacity-50"
-        title={error || (saved ? "Remove offline copy" : "Save for offline playback")}
-        aria-label={error || (saved ? `Remove ${track.title} offline copy` : `Save ${track.title} for offline playback`)}
+        title={error || (saved ? `Remove ${offlineLabel}` : `Save ${offlineLabel} for offline playback`)}
+        aria-label={error || (saved ? `Remove ${track.title} ${offlineLabel}` : `Save ${track.title} for offline playback`)}
       >
         {saved ? <Check size={16} /> : <CloudDownload size={16} />}
       </button>

@@ -354,11 +354,17 @@ router.get("/tracks/:id/youtube", asyncHandler(async (req, res) => {
     if (video) {
       const youtubeUrl = `youtube:${video.videoId}`;
       const duration = video.seconds || row.duration;
-      await db.prepare("UPDATE tracks SET audio_url = ?, duration = ? WHERE id = ?").run(
-        youtubeUrl,
-        duration,
-        row.id
-      );
+      // Keep Spotify's preview URL intact so a saved preview remains available
+      // to the installed app when it is offline. YouTube is only a playback
+      // resolver here, not an offline source.
+      const isSpotifyTrack = typeof row.genre_tags === "string" && row.genre_tags.includes('"spotify"');
+      if (!isSpotifyTrack || row.audio_url?.startsWith("youtube:")) {
+        await db.prepare("UPDATE tracks SET audio_url = ?, duration = ? WHERE id = ?").run(
+          youtubeUrl,
+          duration,
+          row.id
+        );
+      }
       return res.json({ videoId: video.videoId, duration });
     }
   } catch (err) {

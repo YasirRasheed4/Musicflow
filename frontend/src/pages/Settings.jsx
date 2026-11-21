@@ -48,11 +48,15 @@ export default function Settings() {
   useEffect(() => {
     const saved = localStorage.getItem("musicflow_eq_settings");
     if (saved) {
-      const settings = JSON.parse(saved);
-      setBass(settings.bass || 0);
-      setMids(settings.mids || 0);
-      setTreble(settings.treble || 0);
-      setEqEnabled(settings.enabled !== false);
+      try {
+        const settings = JSON.parse(saved);
+        setBass(settings.bass || 0);
+        setMids(settings.mids || 0);
+        setTreble(settings.treble || 0);
+        setEqEnabled(settings.enabled !== false);
+      } catch {
+        localStorage.removeItem("musicflow_eq_settings");
+      }
     }
   }, []);
 
@@ -83,9 +87,9 @@ export default function Settings() {
     setTreble(0);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     stopPlayback();
-    logout();
+    await logout();
     navigate("/login");
   };
 
@@ -256,7 +260,7 @@ export default function Settings() {
                     </div>
                     <div className="rounded-xl bg-surface2 p-3">
                       <p className="text-xs text-muted">Audio Stream Engine</p>
-                      <p className="font-semibold text-emerald-400">Full Songs Enabled</p>
+                      <p className="font-semibold text-emerald-400">Online playback enabled</p>
                     </div>
                   </div>
                 </div>

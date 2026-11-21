@@ -1,9 +1,9 @@
 const SHELL_CACHE = "musicflow-shell-v1";
-const DATA_CACHE = "musicflow-public-data-v1";
-const MEDIA_CACHE = "musicflow-offline-media";
+const DATA_CACHE = "musicflow-public-data-v2";
+const MEDIA_CACHE = "musicflow-offline-media-v2";
 const CURRENT_CACHES = new Set([SHELL_CACHE, DATA_CACHE, MEDIA_CACHE]);
 
-function isPublicApiPath(pathname) {
+function isCacheableApiPath(pathname) {
   return (
     pathname === "/api/albums" ||
     /^\/api\/albums\/\d+$/.test(pathname) ||
@@ -14,6 +14,14 @@ function isPublicApiPath(pathname) {
     pathname === "/api/playlists/public" ||
     /^\/api\/playlists\/\d+$/.test(pathname) ||
     pathname === "/api/rotation/albums"
+  );
+}
+
+function isSpotifyPreviewUrl(url) {
+  return (
+    url.protocol === "https:" &&
+    /(^|\.)scdn\.co$/i.test(url.hostname) &&
+    url.pathname.includes("/mp3-preview/")
   );
 }
 
@@ -106,11 +114,16 @@ async function networkFirstApi(request, url) {
   const cache = await caches.open(DATA_CACHE);
   try {
     const response = await fetch(request);
-    if (response.ok) {
-      if (/^\/api\/playlists\/\d+$/.test(url.pathname)) {
+    let shouldCache = response.ok;
+    if (shouldCache && /^\/api\/playlists\/\d+$/.test(url.pathname)) {
+      try {
         const data = await response.clone().json();
-        if (!data.playlist?.isPublic) return response;
+        shouldCache = Boolean(data.playlist?.isPublic);
+      } catch {
+        shouldCache = false;
       }
+    }
+    if (shouldCache) {
       await cache.put(request, response.clone());
     }
     return response;
@@ -177,6 +190,12 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
+
+  if (isSpotifyPreviewUrl(url)) {
+    event.respondWith(audioResponse(request));
+    return;
+  }
+
   if (url.origin !== self.location.origin) return;
 
   if (url.pathname.startsWith("/audio/") || /^\/api\/tracks\/\d+\/audio$/.test(url.pathname)) {
@@ -184,7 +203,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.pathname.startsWith("/api/") && isPublicApiPath(url.pathname)) {
+  if (url.pathname.startsWith("/api/") && isCacheableApiPath(url.pathname)) {
     event.respondWith(networkFirstApi(request, url));
     return;
   }
@@ -218,4 +237,11 @@ self.addEventListener("fetch", (event) => {
       )
     );
   }
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "musicflow-clear-offline-user-data") return;
+  event.waitUntil(
+    Promise.all([caches.delete(MEDIA_CACHE), caches.delete(DATA_CACHE)])
+  );
 });

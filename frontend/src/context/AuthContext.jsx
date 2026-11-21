@@ -2,8 +2,26 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import { api, getToken, setToken } from "../api";
 import { disconnectSpotify } from "../spotifyAuth";
 import { supabase } from "../lib/supabase";
+import { clearOfflineUserData } from "../offline";
 
 const AuthContext = createContext(null);
+const OFFLINE_USER_KEY = "musicflow-offline-user";
+
+function rememberUser(user) {
+  if (user) localStorage.setItem(OFFLINE_USER_KEY, JSON.stringify(user));
+}
+
+function getRememberedUser() {
+  try {
+    return JSON.parse(localStorage.getItem(OFFLINE_USER_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function getOfflineFallbackUser() {
+  return typeof navigator !== "undefined" && !navigator.onLine ? getRememberedUser() : null;
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -20,17 +38,29 @@ export function AuthProvider({ children }) {
         } else if (data.session) {
           try {
             const res = await api.get("/auth/me");
-            if (active) setUser(res.user);
+            if (active) {
+              rememberUser(res.user);
+              setUser(res.user);
+            }
           } catch {
-            await supabase.auth.signOut();
-            if (active) setUser(null);
+            const rememberedUser = getOfflineFallbackUser();
+            if (active && rememberedUser) setUser(rememberedUser);
+            else {
+              await supabase.auth.signOut();
+              if (active) setUser(null);
+            }
           }
         } else if (getToken()) {
           try {
             const res = await api.get("/auth/me");
-            if (active) setUser(res.user);
+            if (active) {
+              rememberUser(res.user);
+              setUser(res.user);
+            }
           } catch {
-            setToken(null);
+            const rememberedUser = getOfflineFallbackUser();
+            if (active && rememberedUser) setUser(rememberedUser);
+            else setToken(null);
           }
         }
         if (active) setLoading(false);
@@ -43,9 +73,14 @@ export function AuthProvider({ children }) {
       }
       try {
         const res = await api.get("/auth/me");
-        if (active) setUser(res.user);
+        if (active) {
+          rememberUser(res.user);
+          setUser(res.user);
+        }
       } catch {
-        setToken(null);
+        const rememberedUser = getOfflineFallbackUser();
+        if (active && rememberedUser) setUser(rememberedUser);
+        else setToken(null);
       } finally {
         if (active) setLoading(false);
       }
@@ -72,6 +107,7 @@ export function AuthProvider({ children }) {
       if (error) throw new Error(error.message);
       try {
         const res = await api.get("/auth/me");
+        rememberUser(res.user);
         setUser(res.user);
         return res.user;
       } catch (error) {
@@ -82,6 +118,7 @@ export function AuthProvider({ children }) {
 
     const res = await api.post("/auth/login", { email, password });
     setToken(res.token);
+    rememberUser(res.user);
     setUser(res.user);
     return res.user;
   }, []);
@@ -98,21 +135,32 @@ export function AuthProvider({ children }) {
         throw new Error("Account created. Check your email to confirm it, then sign in.");
       }
       const res = await api.get("/auth/me");
+      rememberUser(res.user);
       setUser(res.user);
       return res.user;
     }
 
     const res = await api.post("/auth/signup", { name, email, password });
     setToken(res.token);
+    rememberUser(res.user);
     setUser(res.user);
     return res.user;
   }, []);
 
   const logout = useCallback(async () => {
-    if (supabase) await supabase.auth.signOut();
-    setToken(null);
-    disconnectSpotify();
-    setUser(null);
+    try {
+      if (supabase) await supabase.auth.signOut();
+    } finally {
+      setToken(null);
+      disconnectSpotify();
+      localStorage.removeItem(OFFLINE_USER_KEY);
+      try {
+        await clearOfflineUserData();
+      } catch (error) {
+        console.error("Could not clear offline user data:", error);
+      }
+      setUser(null);
+    }
   }, []);
 
   return (
