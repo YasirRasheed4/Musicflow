@@ -30,6 +30,16 @@ async function request(path, options = {}) {
   const body = isJson ? await res.json() : null;
 
   if (!res.ok) {
+    if (res.status === 401) {
+      setToken(null);
+      if (supabase) {
+        try {
+          await supabase.auth.signOut();
+        } catch {
+          // The local session is cleared even if Supabase cannot be reached.
+        }
+      }
+    }
     throw new Error(body?.error || `Request failed (${res.status})`);
   }
   return body;
