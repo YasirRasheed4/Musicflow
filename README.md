@@ -63,10 +63,11 @@ Open http://localhost:5173 and create an account from the Sign up page.
 
 This project uses React + Vite, so it uses Supabase's browser client rather
 than the Next.js `@supabase/ssr` cookie helpers. Put the Supabase URL and
-publishable key in `frontend/.env.local` as `VITE_SUPABASE_URL` and
-`VITE_SUPABASE_PUBLISHABLE_KEY`, and in the backend environment as
-`SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`. The frontend persists and
-refreshes browser sessions automatically; the Express API validates those
+anon key in `frontend/.env.local` as `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_ANON_KEY`, and in the backend environment as
+`SUPABASE_URL` and `SUPABASE_ANON_KEY`. The app also accepts the older
+`*_PUBLISHABLE_KEY` names. The frontend persists and refreshes browser
+sessions automatically; the Express API validates those
 sessions and provisions a matching local user record for the existing
 MusicFlow tables. See the `.env.example` files for the complete variable list.
 
