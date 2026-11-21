@@ -136,4 +136,23 @@ function isSupabaseConfigured() {
   return Boolean(supabase);
 }
 
-module.exports = { signToken, requireAuth, optionalAuth, isSupabaseConfigured, JWT_SECRET };
+async function isSupabaseReachable() {
+  if (!supabaseUrl || !supabasePublishableKey) return false;
+  try {
+    const response = await fetch(`${supabaseUrl}/auth/v1/settings`, {
+      headers: { apikey: supabasePublishableKey },
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+module.exports = {
+  signToken,
+  requireAuth,
+  optionalAuth,
+  isSupabaseConfigured,
+  isSupabaseReachable,
+  JWT_SECRET,
+};
